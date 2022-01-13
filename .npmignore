@@ -1,0 +1,6 @@
+src/
+dist/mgmt/
+docker/
+node_modules/
+*.code-workspace
+tsconfig.json

@@ -1,0 +1,77 @@
+version: '3.8'
+
+services:
+
+  #Redis Cluster
+  redisNode0:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode0
+    ports:
+      - '0.0.0.0:6370:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode1:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode1
+    ports:
+      - '0.0.0.0:6371:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode2:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode2
+    ports:
+      - '0.0.0.0:6372:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode3:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode3
+    ports:
+      - '0.0.0.0:6373:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode4:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode4
+    ports:
+      - '0.0.0.0:6374:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode5:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode5
+    ports:
+      - '0.0.0.0:6375:6379'
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisClusterInit:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisClusterInit
+    ports:
+      - '0.0.0.0:6376:6379'
+    depends_on:
+      - redisNode0
+      - redisNode1
+      - redisNode2
+      - redisNode3
+      - redisNode4
+      - redisNode5
+    environment:
+      - 'REDIS_CLUSTER_REPLICAS=1'
+      - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
+      - 'REDIS_CLUSTER_CREATOR=yes'
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_PORT_NUMBER=6379'
