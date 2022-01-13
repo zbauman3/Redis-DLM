@@ -1,0 +1,19 @@
+{
+  "name": "node-redlock",
+  "version": "0.1.0",
+  "description": "A simple package implementing RedLock, using either node-redis or ioredis",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zbauman3/node-redlock.git"
+  },
+  "author": "Zane Bauman",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/zbauman3/node-redlock/issues"
+  },
+  "homepage": "https://github.com/zbauman3/node-redlock#readme"
+}
