@@ -1,8 +1,7 @@
 import { randomBytes } from "crypto";
-import { TypedEventEmitter as EventEmitter } from "./util/TypedEventEmitter";
-import { resolve as resolvePath } from "path";
-import { readFileSync } from 'fs';
-import type { Redis, Cluster } from "ioredis";
+import { aquireLockLua, extendLockLua, removeLockLua } from "./luaStrings";
+import type { Redis as IORedis, Cluster as IORedisCluster } from "ioredis";
+import type { createClient as createRedisClient, createCluster as createRedisCluster } from "redis";
 
 /**
  * @see https://redis.io/topics/distlock
@@ -32,134 +31,154 @@ import type { Redis, Cluster } from "ioredis";
  *    was not able to lock).
  */
 
+export type RedLockClient = IORedis | IORedisCluster | ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
+
 /**
- * `ACTIVE`: The lock is valid \
- * `INACTIVE`: The lock expired or was released \
- * `FAILED`: The lock failed 
+ * This represents a lock and its current state. This essentially just holds
+ * the information of the lock, handles `autoExtend`, and provides utility
+ * functions for extending and releasing.
+ * 
+ * All times are in milliseconds.
  */
-export type LockStatus = 'ACTIVE' | 'INACTIVE' | 'FAILED';
-export type LockEvents = {
-	/** Fired when the lock's expire time is 75% complete. */
-	expiring: ()=>void
-	/** Fired when the lock has expired or was released. */
-	inactive: ()=>void
-}
+export class Lock{
 
-export type RedLockClient = Redis | Cluster;
+	/** The time that the lock will expire at */
+	protected expireTime = Date.now();
+	/** A timeout for the auto extend loop */
+	protected extendTimeout = setTimeout(()=>void 0, 0);//just to set an init value.
+	/** Bound function from parent. */
+	protected readonly _extend: RedLock['extend'];
+	/** Bound function from parent. */
+	protected readonly _release: RedLock['release'];
 
-export const aquireLockLua = readFileSync(resolvePath(__dirname, '../lua/aquireLock.lua'), {encoding: 'utf8'});
-export const extendLockLua = readFileSync(resolvePath(__dirname, '../lua/extendLock.lua'), {encoding: 'utf8'});
-export const removeLockLua = readFileSync(resolvePath(__dirname, '../lua/removeLock.lua'), {encoding: 'utf8'});
-
-export class Lock extends EventEmitter<LockEvents>{
-
+	/** The Redis key */
 	public readonly key: string;
+	/** The Redis key's unique value */
 	public readonly uid: string;
-	public status: LockStatus;
-	/** If the lock should auto extend */
-	public autoExtend: boolean = false;
+	/** The initial duration, used for extend */
+	public readonly duration: number;
+	/** If this lock will auto extend or not */
+	public readonly autoExtend: boolean;
+	/** Max time to hold the lock across auto extends. */
+	public readonly maxHoldTime: number;
+	/** The time that this lock started at */
+	public readonly startTime = Date.now();
 
-	protected expiredTimeout = setTimeout(()=>void 0, 0);//just to set an init value.
-	protected expiringTimeout = setTimeout(()=>void 0, 0);//just to set an init value.
+	/** Set the remaining time (calculates expireTime) */
+	protected set remainingTime(duration: number){
 
-	private redLock: RedLock;
+		this.expireTime = Date.now()+duration;
+
+	}
+	/** Get the remaining time on the lock */
+	public get remainingTime(){
+
+		const remaining = this.expireTime - Date.now();
+		return (remaining < 0 ? 0 : remaining);
+
+	}
 
 	public constructor({
-		redLock,
 		key,
 		uid,
-		status,
 		duration,
+		remainingTime,
 		autoExtend,
+		maxHoldTime,
+		extend,
+		release,
 	}:{
-		redLock: RedLock,
 		key: string,
 		uid: string,
-		status: LockStatus,
 		duration: number,
-		autoExtend?: boolean,
+		remainingTime: number,
+		autoExtend: boolean,
+		maxHoldTime: number,
+		extend: RedLock['extend'],
+		release: RedLock['release']
 	}){
 
-		super();
-
-		this.redLock = redLock;
 		this.key = key;
 		this.uid = uid;
-		this.status = status;
+		this.duration = duration;
+		this.remainingTime = remainingTime;
+		this.autoExtend = autoExtend;
+		this.maxHoldTime = maxHoldTime;
+		this._extend = extend;
+		this._release = release;
 
-		if(typeof autoExtend === 'boolean'){
-			this.autoExtend = autoExtend;
-		}
-
-		if(this.status === 'ACTIVE'){
-			this._updateTimeout(duration);
+		if(this.autoExtend === true){
+			this.doExtendTimeout();
 		}
 
 	};
-	
-	protected _updateTimeout(duration: number){
 
-		clearTimeout(this.expiredTimeout);
-		clearTimeout(this.expiringTimeout);
+	/**
+	 * This sets a timeout for `remainingTime/2` that calls `extend` then calls
+	 * itself again. \
+	 * The loop stops when `remainingTime === 0`, `extend` fails, or `release`
+	 * is called.
+	 */
+	protected doExtendTimeout(){
 
-		if(this.status !== 'ACTIVE'){
+		clearTimeout(this.extendTimeout);
+
+		//leave early
+		if(this.remainingTime === 0){
 			return;
 		}
 
-		this.expiredTimeout = setTimeout(()=>{
+		this.extendTimeout = setTimeout(async ()=>{
 
-			if(this.status !== 'ACTIVE'){
-				return;
-			}
+			try{
+				await this.extend();
+				this.doExtendTimeout();
+			}catch(_){}
 
-			this.status = 'INACTIVE';
-			this.emit('inactive');
-
-		}, duration);
-
-		this.expiringTimeout = setTimeout(()=>{
-
-			if(this.status !== 'ACTIVE'){
-				return;
-			}
-
-			if(this.autoExtend === true){
-
-				this.extend();
-
-			}else{
-
-				this.emit('expiring');
-
-			}
-
-		}, Math.floor(duration*0.75));
+		}, Math.floor(this.remainingTime/2));
 
 	};
 
+	/** Attempts to extend the lock by `duration` again. */
 	public async extend(){
-		return this.redLock.extend(this);
+
+		try{
+
+			this.remainingTime = await this._extend(this);
+			return this.remainingTime;
+
+		}catch(e){
+
+			clearTimeout(this.extendTimeout);
+			throw e;
+
+		}
+
 	};
 
+	/** Attempts to release the lock. */
 	public async release(){
-		return this.redLock.release(this);
+
+		clearTimeout(this.extendTimeout);
+		await this._release(this);
+
 	};
 
 }
 
-export class RedLock extends EventEmitter<{}>{
+export class RedLock{
 
 	protected clients: RedLockClient[];
 
 	public constructor(clients: RedLockClient[]){
-
-		super();
 
 		if(clients.length === 0){
 			throw new Error('At least one client is required.');
 		}
 
 		this.clients = clients;
+		this.extend = this.extend.bind(this);
+		this.release = this.release.bind(this);
 
 	}
 
@@ -188,15 +207,16 @@ export class RedLock extends EventEmitter<{}>{
 			//use `>= 0` so we always try once, twice if `retries === 1`, so on.
 			while(retries >= 0){
 
-				const results = await Promise.all(
+				const results = await Promise.allSettled(
 					this.clients.map((client)=>client.eval(aquireLockLua, 1, key, uid, parsedDuration))
 				);
 
 				let success = 0;
 
 				for(let i = 0; i < results.length; i++){
-					
-					if(results[i] === 'OK'){
+
+					const result = results[i]!//for TS
+					if(result.status === 'fulfilled' && result.value === 'OK'){
 						success++;
 					}
 					
@@ -227,12 +247,25 @@ export class RedLock extends EventEmitter<{}>{
 
 
 			//step 3
-			const remainingDuration = Math.floor(parsedDuration-(Date.now()-start)-(0.01 * parsedDuration)-2);//duration - duration to execute - drift;
-			if(remainingDuration <= 0){
+			const remainingTime = Math.floor(parsedDuration-(Date.now()-start)-(0.01 * parsedDuration)-2);//duration - duration to execute - drift;
+			if(remainingTime <= 0){
 
 				throw new Error('Took too long to aquire the lock.');
 
 			}
+
+			return new Lock({
+				key,
+				uid,
+				remainingTime,
+				duration: parsedDuration,
+				/** @todo replace */
+				autoExtend: false,
+				/** @todo replace */
+				maxHoldTime: 0,
+				extend: this.extend,
+				release: this.release,
+			});
 
 		}catch(e){
 
@@ -241,9 +274,12 @@ export class RedLock extends EventEmitter<{}>{
 				await this.release(new Lock({
 					key,
 					uid,
-					redLock: this,
-					status: 'FAILED',
 					duration: 0,
+					remainingTime: 0,
+					autoExtend: false,
+					maxHoldTime: 0,
+					extend: this.extend,
+					release: this.release,
 				}));
 
 			}catch(_){ /** noop */ }
@@ -254,17 +290,34 @@ export class RedLock extends EventEmitter<{}>{
 
 	}
 
-	public async release(lock: Lock){};
-	public async extend(lock: Lock){};
+	protected async extend(lock: Lock){
+	
+		//need to check remaining time, max hold time, and init time.
+		extendLockLua;
+		
+		return 0;
+	
+	
+	};
+
+	protected async release(lock: Lock){
+
+		removeLockLua;
+
+	};
 
 
 
 
 
 	static readonly defaults: {
-		readonly duration: number
+		readonly duration: number,
+		readonly autoExtend: false,
+		readonly maxHoldTime: number,
 	} = {
-		duration: 30000
+		duration: 30*1000,//30 sec
+		autoExtend: false,//no
+		maxHoldTime: 60*5*1000//5 min
 	};
 
 }
