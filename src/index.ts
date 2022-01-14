@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { aquireLockLua, extendLockLua, removeLockLua } from "./luaStrings";
 import type { Redis as IORedis, Cluster as IORedisCluster } from "ioredis";
 import type { createClient as createRedisClient, createCluster as createRedisCluster } from "redis";
+import RedLockError from "./RedLockError";
 
 /**
  * @see https://redis.io/topics/distlock
@@ -40,8 +41,9 @@ import type { createClient as createRedisClient, createCluster as createRedisClu
  * @todo
  * 
  * - [ ] Tests
- * - [ ] Custom Errors
- * - [ ] Finish extend
+ * - [ ] Docs
+ * - [ ] Comments
+ * - [ ] Review Errors
  * 
  */
 
@@ -107,12 +109,6 @@ export class Lock{
 	/** The time that this lock started at */
 	public readonly startTime = Date.now();
 
-	/** Set the remaining time (calculates `expireTime`) */
-	private set remainingTime(duration: number){
-
-		this.expireTime = Date.now()+duration;
-
-	}
 	/** Get the remaining time on the lock */
 	public get remainingTime(){
 
@@ -142,17 +138,25 @@ export class Lock{
 		this.key = key;
 		this.uid = uid;
 		this.duration = duration;
-		this.remainingTime = remainingTime;
+		this.expireTime = Date.now()+remainingTime;
 		this.maxHoldTime = maxHoldTime;
 		this._extend = extend;
 		this._release = release;
 
 	};
 
-	/** Attempts to extend the lock by `duration` again. Resolves to the new `remainingTime`. */
-	public async extend(){
+	/**
+	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
+	 * This does not attempt to remove the lock on failure. \
+	 * If `duration` is not passed here, it will be taken from the original
+	 * `duration`.
+	 */
+	public async extend(settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
-		this.remainingTime = await this._extend(this);
+		const remaining = await this._extend(this, settings);
+
+		this.expireTime = Date.now()+remaining;
+
 		return this.remainingTime;
 
 	};
@@ -177,7 +181,7 @@ export class RedLock{
 	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
 
 		if(clients.length === 0){
-			throw new Error('At least one client is required.');
+			throw new RedLockError('minClientCount');
 		}
 
 		this.clients = clients;
@@ -197,6 +201,7 @@ export class RedLock{
 
 	};
 
+	/** Attempts to aquire the lock */
 	public async aquire(key: string, settings: Partial<RedLockSettings> = {}){
 
 		//step 1.
@@ -254,13 +259,12 @@ export class RedLock{
 			//step 5.
 			await this.noThrowQuickRelease({key, uid});
 
-			throw new Error('Failed to aquire a lock consensus.');
+			throw new RedLockError('noConsensus');
 
 		}
 
 		//steps 3 & 4.
-		//parsedDuration - execution time - drift;
-		const remainingTime = Math.floor(lockSettings.duration - (Date.now() - start) - (lockSettings.driftFactor * lockSettings.duration) - lockSettings.driftConstant);
+		const remainingTime = this.calculateRemainingTime(start, lockSettings);
 
 		if(remainingTime <= 0){
 
@@ -268,7 +272,7 @@ export class RedLock{
 			//step 5.
 			await this.noThrowQuickRelease({key, uid});
 
-			throw new Error('Took too long to aquire the lock.');
+			throw new RedLockError('tooLongToAquire');
 
 		}
 
@@ -285,13 +289,68 @@ export class RedLock{
 
 	};
 
-	private async extend(lock: Lock){
-	
-		//need to check remaining time, max hold time, and init time.
-		extendLockLua;
-		
-		return 0;
-	
+	/**
+	 * Attempts to extend the lock. This does not attempt to remove the lock on
+	 * failure.
+	 */
+	private async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
+
+		//get the start time to track the time to extend
+		const start = Date.now();
+
+		if(lock.remainingTime === 0){
+			throw new RedLockError('lockNotValid');
+		}
+
+		//how long the lock has already been held
+		const currentHoldTime = (Date.now() - lock.startTime);
+
+		if(currentHoldTime >= lock.maxHoldTime){
+			throw new RedLockError('excededMaxHold');
+		}
+
+		const lockSettings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'> = {
+			duration: (typeof settings.duration === 'number' ? settings.duration : lock.duration),
+			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
+		};
+
+		if(currentHoldTime+lockSettings.duration > lock.maxHoldTime){
+			throw new RedLockError('wouldExcededMaxHold');
+		}
+
+		const results = await Promise.allSettled(
+			this.clients.map((client)=>this.runLua(client, extendLockLua, [lock.key], [lock.uid, lockSettings.duration.toString()]))
+		);
+
+		let successCount = 0;
+		for(let i = 0; i < results.length; i++){
+
+			const result = results[i]!;//for TS
+			if(result.status === 'fulfilled' && result.value === 1){
+
+				successCount++;
+
+			}
+
+		}
+
+		//check if there was a consensus on the lock.
+		if(successCount < this.clientConsensus){
+			
+			throw new RedLockError('noConsensus');
+
+		}
+
+		const remainingTime = this.calculateRemainingTime(start, lockSettings);
+
+		if(remainingTime <= 0){
+
+			throw new RedLockError('tooLongToAquire');
+
+		}
+
+		return remainingTime;
 	
 	};
 
@@ -349,6 +408,14 @@ export class RedLock{
 
 	};
 
+	/** Calculates the remaining time of a lock, including drift. */
+	private calculateRemainingTime(start: number, settings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
+
+		//duration - execution time - drift;
+		return Math.floor(settings.duration - (Date.now() - start) - (settings.driftFactor * settings.duration) - settings.driftConstant);
+
+	};
+
 	/** Checks if a given value is an Error and is a `NOSCRIPT` error. */
 	private isNoScriptError(e: any){
 
@@ -364,17 +431,9 @@ export class RedLock{
 
 		return (
 			('eval' in client) &&
-			('evalsha' in client)
-		);
-
-	};
-
-	/** A typeguard for determining which client this is */
-	private isNodeRedisClient(client: RedLockClient):client is NodeRedisClient{
-
-		return (
-			('eval' in client) &&
-			('evalSha' in client)
+			('evalsha' in client) && 
+			('defineCommand' in client) && 
+			('createBuiltinCommand' in client)
 		);
 
 	};
