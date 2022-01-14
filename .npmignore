@@ -4,3 +4,4 @@ docker/
 node_modules/
 *.code-workspace
 tsconfig.json
+.eslintrc.json

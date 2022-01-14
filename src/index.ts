@@ -39,8 +39,9 @@ import type { createClient as createRedisClient, createCluster as createRedisClu
 /**
  * @todo
  * 
- * - [ ] Use evalsha first, then eval.
  * - [ ] Tests
+ * - [ ] Custom Errors
+ * - [ ] Finish extend
  * 
  */
 
@@ -51,7 +52,9 @@ import type { createClient as createRedisClient, createCluster as createRedisClu
 
 
 /** Clients or ClusterClients from either ioredis or redis. */
-export type RedLockClient = IORedis | IORedisCluster | ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
+export type NodeRedisClient = ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
+export type IORedisClient = IORedis | IORedisCluster;
+export type RedLockClient = IORedisClient | NodeRedisClient;
 
 /** The settings for a lock. */
 export interface RedLockSettings{
@@ -87,11 +90,11 @@ const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
 export class Lock{
 
 	/** The time that the lock will expire at */
-	protected expireTime = Date.now();
+	private expireTime = Date.now();
 	/** Bound function from parent. */
-	protected readonly _extend: RedLock['extend'];
+	private readonly _extend: RedLock['extend'];
 	/** Bound function from parent. */
-	protected readonly _release: RedLock['release'];
+	private readonly _release: RedLock['release'];
 
 	/** The Redis key */
 	public readonly key: string;
@@ -105,7 +108,7 @@ export class Lock{
 	public readonly startTime = Date.now();
 
 	/** Set the remaining time (calculates `expireTime`) */
-	protected set remainingTime(duration: number){
+	private set remainingTime(duration: number){
 
 		this.expireTime = Date.now()+duration;
 
@@ -165,11 +168,11 @@ export class Lock{
 
 export class RedLock{
 
-	protected readonly clients: RedLockClient[];
+	private readonly clients: RedLockClient[];
 	/** The minimum number of clients who must confirm the lock */
-	protected readonly clientConsensus: number;
+	private readonly clientConsensus: number;
 	/** The settings for this instance */
-	protected readonly settings: Readonly<RedLockSettings>;
+	private readonly settings: Readonly<RedLockSettings>;
 
 	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
 
@@ -192,9 +195,9 @@ export class RedLock{
 		this.extend = this.extend.bind(this);
 		this.release = this.release.bind(this);
 
-	}
+	};
 
-	public async aquireLock(key: string, settings: Partial<RedLockSettings> = {}){
+	public async aquire(key: string, settings: Partial<RedLockSettings> = {}){
 
 		//step 1.
 		const start = Date.now();
@@ -214,7 +217,7 @@ export class RedLock{
 
 			//step 2.
 			const results = await Promise.allSettled(
-				this.clients.map((client)=>client.eval(aquireLockLua, 1, key, uid, lockSettings.duration))
+				this.clients.map((client)=>this.runLua(client, aquireLockLua, [key], [uid, lockSettings.duration.toString()]))
 			);
 
 			let successCount = 0;
@@ -280,9 +283,9 @@ export class RedLock{
 			release: this.release,
 		});
 
-	}
+	};
 
-	protected async extend(lock: Lock){
+	private async extend(lock: Lock){
 	
 		//need to check remaining time, max hold time, and init time.
 		extendLockLua;
@@ -293,10 +296,10 @@ export class RedLock{
 	};
 
 	/** Attempts to release the provided lock */
-	protected async release(lock: Lock){
+	private async release(lock: Lock){
 
 		const results = await Promise.allSettled(
-			this.clients.map((client)=>client.eval(removeLockLua, 1, lock.key, lock.uid))
+			this.clients.map((client)=>this.runLua(client, removeLockLua, [lock.key], [lock.uid]))
 		);
 
 		for(let i = 0; i < results.length; i++){
@@ -307,13 +310,77 @@ export class RedLock{
 				throw result.reason;
 
 			}
-			
+
 		}
 
 	};
 
+	/** Executes the given Lua & arguments on the provided client */
+	private async runLua(
+		client: RedLockClient,
+		lua: typeof aquireLockLua | typeof extendLockLua | typeof removeLockLua,
+		keys: string[],
+		argv: string[]
+	){
+
+		try{
+
+			// First try to send view SHA1
+			const res = await (this.isIORedisClient(client)
+				? client.evalsha(lua.sha1, keys.length, ...keys, ...argv)
+				: client.evalSha(lua.sha1, {keys: keys, arguments: argv})
+			);
+			return res;
+
+		}catch(e){
+
+			// If this is not a `NOSCRIPT` error, throw it
+			if(!this.isNoScriptError(e)){
+				throw e;
+			}
+
+		}
+
+		//if there was an error, and it was `NOSCRIPT`, try sending the scripts directly.
+		return (this.isIORedisClient(client)
+			? client.eval(lua.script, keys.length, ...keys, ...argv)
+			: client.eval(lua.script, {keys: keys, arguments: argv})
+		);
+
+	};
+
+	/** Checks if a given value is an Error and is a `NOSCRIPT` error. */
+	private isNoScriptError(e: any){
+
+		return (
+			(e instanceof Error) &&
+			/NOSCRIPT/i.test(e.message)
+		);
+
+	}
+
+	/** A typeguard for determining which client this is */
+	private isIORedisClient(client: RedLockClient):client is IORedisClient{
+
+		return (
+			('eval' in client) &&
+			('evalsha' in client)
+		);
+
+	};
+
+	/** A typeguard for determining which client this is */
+	private isNodeRedisClient(client: RedLockClient):client is NodeRedisClient{
+
+		return (
+			('eval' in client) &&
+			('evalSha' in client)
+		);
+
+	};
+
 	/** A helper function to release without an existing `Lock` */
-	protected async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
+	private async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
 
 		try{
 
@@ -329,15 +396,15 @@ export class RedLock{
 
 		}catch(_){ /** noop */ }
 
-	}
+	};
 
 	/** A helper for random retry timeouts */
-	protected async randomSleep(maxMS: number){
+	private async randomSleep(maxMS: number){
 
 		await new Promise((res)=>{
 			setTimeout(res, Math.floor(Math.random() * maxMS));
 		});
 
-	}
+	};
 
 }

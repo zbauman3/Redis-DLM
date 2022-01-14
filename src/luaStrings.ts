@@ -1,6 +1,21 @@
 import { resolve as resolvePath } from "path";
 import { readFileSync } from 'fs';
+import { createHash } from "crypto";
 
-export const aquireLockLua = readFileSync(resolvePath(__dirname, '../lua/aquireLock.lua'), {encoding: 'utf8'});
-export const extendLockLua = readFileSync(resolvePath(__dirname, '../lua/extendLock.lua'), {encoding: 'utf8'});
-export const removeLockLua = readFileSync(resolvePath(__dirname, '../lua/removeLock.lua'), {encoding: 'utf8'});
+const aquireLockLuaScript = readFileSync(resolvePath(__dirname, '../lua/aquireLock.lua'), {encoding: 'utf8'});
+export const aquireLockLua = {
+	script: aquireLockLuaScript,
+	sha1: createHash("sha1").update(aquireLockLuaScript).digest("hex"),
+} as const;
+
+const extendLockLuaScript = readFileSync(resolvePath(__dirname, '../lua/extendLock.lua'), {encoding: 'utf8'});
+export const extendLockLua = {
+	script: extendLockLuaScript,
+	sha1: createHash("sha1").update(extendLockLuaScript).digest("hex"),
+} as const;
+
+const removeLockLuaScript = readFileSync(resolvePath(__dirname, '../lua/removeLock.lua'), {encoding: 'utf8'});
+export const removeLockLua = {
+	script: removeLockLuaScript,
+	sha1: createHash("sha1").update(removeLockLuaScript).digest("hex"),
+} as const;
