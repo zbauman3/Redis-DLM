@@ -31,12 +31,56 @@ import type { createClient as createRedisClient, createCluster as createRedisClu
  *    was not able to lock).
  */
 
+
+
+
+
+
+/**
+ * @todo
+ * 
+ * - [ ] Use evalsha first, then eval.
+ * - [ ] Tests
+ * 
+ */
+
+
+
+
+
+
+
+/** Clients or ClusterClients from either ioredis or redis. */
 export type RedLockClient = IORedis | IORedisCluster | ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
+
+/** The settings for a lock. */
+export interface RedLockSettings{
+	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `30000`. */
+	duration: number,
+	/** The number of times to retry aquiring a lock. Default `0`. */
+	retryCount: number,
+	/** The max retry delay in milliseconds. A random time between this and zero will be selected. Default `500`. */
+	retryDelay: number,
+	/** The maximum time in milliseconds that a lock should be held across extensions. Default `300000`. */
+	maxHoldTime: number,
+	/** The percent of the duration that should be used in drift. Between 0 and 1. Default `0.01`. */
+	driftFactor: number,
+	/** The number of milliseconds added to the drift. Default `2`. */
+	driftConstant: number,
+}
+
+const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
+	duration: 30*1000,
+	retryCount: 0,
+	retryDelay: 500,
+	maxHoldTime: 60*5*1000,
+	driftFactor: 0.01,
+	driftConstant: 2,
+});
 
 /**
  * This represents a lock and its current state. This essentially just holds
- * the information of the lock, handles `autoExtend`, and provides utility
- * functions for extending and releasing.
+ * the information of the lock and provides utility functions.
  * 
  * All times are in milliseconds.
  */
@@ -44,8 +88,6 @@ export class Lock{
 
 	/** The time that the lock will expire at */
 	protected expireTime = Date.now();
-	/** A timeout for the auto extend loop */
-	protected extendTimeout = setTimeout(()=>void 0, 0);//just to set an init value.
 	/** Bound function from parent. */
 	protected readonly _extend: RedLock['extend'];
 	/** Bound function from parent. */
@@ -56,15 +98,13 @@ export class Lock{
 	/** The Redis key's unique value */
 	public readonly uid: string;
 	/** The initial duration, used for extend */
-	public readonly duration: number;
-	/** If this lock will auto extend or not */
-	public readonly autoExtend: boolean;
-	/** Max time to hold the lock across auto extends. */
-	public readonly maxHoldTime: number;
+	public readonly duration: RedLockSettings['duration'];
+	/** Max time to hold the lock across extends. */
+	public readonly maxHoldTime: RedLockSettings['maxHoldTime'];
 	/** The time that this lock started at */
 	public readonly startTime = Date.now();
 
-	/** Set the remaining time (calculates expireTime) */
+	/** Set the remaining time (calculates `expireTime`) */
 	protected set remainingTime(duration: number){
 
 		this.expireTime = Date.now()+duration;
@@ -83,17 +123,15 @@ export class Lock{
 		uid,
 		duration,
 		remainingTime,
-		autoExtend,
 		maxHoldTime,
 		extend,
 		release,
 	}:{
 		key: string,
 		uid: string,
-		duration: number,
+		duration: RedLockSettings['duration'],
 		remainingTime: number,
-		autoExtend: boolean,
-		maxHoldTime: number,
+		maxHoldTime: RedLockSettings['maxHoldTime'],
 		extend: RedLock['extend'],
 		release: RedLock['release']
 	}){
@@ -102,64 +140,23 @@ export class Lock{
 		this.uid = uid;
 		this.duration = duration;
 		this.remainingTime = remainingTime;
-		this.autoExtend = autoExtend;
 		this.maxHoldTime = maxHoldTime;
 		this._extend = extend;
 		this._release = release;
 
-		if(this.autoExtend === true){
-			this.doExtendTimeout();
-		}
-
 	};
 
-	/**
-	 * This sets a timeout for `remainingTime/2` that calls `extend` then calls
-	 * itself again. \
-	 * The loop stops when `remainingTime === 0`, `extend` fails, or `release`
-	 * is called.
-	 */
-	protected doExtendTimeout(){
-
-		clearTimeout(this.extendTimeout);
-
-		//leave early
-		if(this.remainingTime === 0){
-			return;
-		}
-
-		this.extendTimeout = setTimeout(async ()=>{
-
-			try{
-				await this.extend();
-				this.doExtendTimeout();
-			}catch(_){}
-
-		}, Math.floor(this.remainingTime/2));
-
-	};
-
-	/** Attempts to extend the lock by `duration` again. */
+	/** Attempts to extend the lock by `duration` again. Resolves to the new `remainingTime`. */
 	public async extend(){
 
-		try{
-
-			this.remainingTime = await this._extend(this);
-			return this.remainingTime;
-
-		}catch(e){
-
-			clearTimeout(this.extendTimeout);
-			throw e;
-
-		}
+		this.remainingTime = await this._extend(this);
+		return this.remainingTime;
 
 	};
 
 	/** Attempts to release the lock. */
 	public async release(){
 
-		clearTimeout(this.extendTimeout);
 		await this._release(this);
 
 	};
@@ -168,125 +165,120 @@ export class Lock{
 
 export class RedLock{
 
-	protected clients: RedLockClient[];
+	protected readonly clients: RedLockClient[];
+	/** The minimum number of clients who must confirm the lock */
+	protected readonly clientConsensus: number;
+	/** The settings for this instance */
+	protected readonly settings: Readonly<RedLockSettings>;
 
-	public constructor(clients: RedLockClient[]){
+	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
 
 		if(clients.length === 0){
 			throw new Error('At least one client is required.');
 		}
 
 		this.clients = clients;
+		this.clientConsensus = Math.floor(this.clients.length/2)+1;
+
+		this.settings = {
+			duration: (typeof settings.duration === 'number' ? settings.duration : defaultSettings.duration),
+			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : defaultSettings.retryCount),
+			retryDelay: (typeof settings.retryDelay === 'number' ? settings.retryDelay : defaultSettings.retryDelay),
+			maxHoldTime: (typeof settings.maxHoldTime === 'number' ? settings.maxHoldTime : defaultSettings.maxHoldTime),
+			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : defaultSettings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : defaultSettings.driftConstant),
+		};
+
 		this.extend = this.extend.bind(this);
 		this.release = this.release.bind(this);
 
 	}
 
-	public async aquireLock({
-		key,
-		duration,
-		retries
-	}:{
-		key: string,
-		/** duration in MS */
-		duration?: number,
-		retries?: number
-	}){
+	public async aquireLock(key: string, settings: Partial<RedLockSettings> = {}){
 
 		//step 1.
 		const start = Date.now();
 		const uid = randomBytes(20).toString("hex");
-		const parsedDuration = (typeof duration === 'number' ? duration : RedLock.defaults.duration);
+		const lockSettings: RedLockSettings = {
+			duration: (typeof settings.duration === 'number' ? settings.duration : this.settings.duration),
+			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : this.settings.retryCount),
+			retryDelay: (typeof settings.retryDelay === 'number' ? settings.retryDelay : this.settings.retryDelay),
+			maxHoldTime: (typeof settings.maxHoldTime === 'number' ? settings.maxHoldTime : this.settings.maxHoldTime),
+			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
+		};
 
-		try{
+		let success = false;
 
-			if(typeof retries !== 'number' || isNaN(retries) || retries < 0){
-				retries = 0;
-			}
+		for(let tries = lockSettings.retryCount+1; tries > 0; tries--){
 
-			//use `>= 0` so we always try once, twice if `retries === 1`, so on.
-			while(retries >= 0){
+			//step 2.
+			const results = await Promise.allSettled(
+				this.clients.map((client)=>client.eval(aquireLockLua, 1, key, uid, lockSettings.duration))
+			);
 
-				const results = await Promise.allSettled(
-					this.clients.map((client)=>client.eval(aquireLockLua, 1, key, uid, parsedDuration))
-				);
+			let successCount = 0;
+			for(let i = 0; i < results.length; i++){
 
-				let success = 0;
+				const result = results[i]!;//for TS
+				if(result.status === 'fulfilled' && result.value === 'OK'){
 
-				for(let i = 0; i < results.length; i++){
+					successCount++;
 
-					const result = results[i]!//for TS
-					if(result.status === 'fulfilled' && result.value === 'OK'){
-						success++;
-					}
-					
 				}
 
-				success;
-				/**
-				 * something like 
-				 * `if((this.client.length <= 2 && success === this.client.length) || success >= (this.client.length/2)+1){}`
-				 * need a better solution for (n/2)+1
-				 * */
+			}
 
+			//check if there was a consensus on the lock.
+			if(successCount >= this.clientConsensus){
 
-
-				retries--;
+				success = true;
+				break;
 
 			}
 
-
-
-
-
-
-
-
-
-
-
-
-			//step 3
-			const remainingTime = Math.floor(parsedDuration-(Date.now()-start)-(0.01 * parsedDuration)-2);//duration - duration to execute - drift;
-			if(remainingTime <= 0){
-
-				throw new Error('Took too long to aquire the lock.');
-
-			}
-
-			return new Lock({
-				key,
-				uid,
-				remainingTime,
-				duration: parsedDuration,
-				/** @todo replace */
-				autoExtend: false,
-				/** @todo replace */
-				maxHoldTime: 0,
-				extend: this.extend,
-				release: this.release,
-			});
-
-		}catch(e){
-
-			try{
-
-				await this.release(new Lock({
-					key,
-					uid,
-					duration: 0,
-					remainingTime: 0,
-					autoExtend: false,
-					maxHoldTime: 0,
-					extend: this.extend,
-					release: this.release,
-				}));
-
-			}catch(_){ /** noop */ }
-
-			throw e;
+			//if there was not a consensus, try removing and wait to retry.
+			await Promise.all([
+				this.noThrowQuickRelease({key, uid}),//step 5.
+				this.randomSleep(lockSettings.retryDelay)
+			]);
 
 		}
+
+		if(!success){
+
+			//was not successful
+			//step 5.
+			await this.noThrowQuickRelease({key, uid});
+
+			throw new Error('Failed to aquire a lock consensus.');
+
+		}
+
+		//steps 3 & 4.
+		//parsedDuration - execution time - drift;
+		const remainingTime = Math.floor(lockSettings.duration - (Date.now() - start) - (lockSettings.driftFactor * lockSettings.duration) - lockSettings.driftConstant);
+
+		if(remainingTime <= 0){
+
+			//took too long
+			//step 5.
+			await this.noThrowQuickRelease({key, uid});
+
+			throw new Error('Took too long to aquire the lock.');
+
+		}
+
+		// create and return the lock
+		return new Lock({
+			key,
+			uid,
+			remainingTime,
+			duration: lockSettings.duration,
+			maxHoldTime: lockSettings.maxHoldTime,
+			extend: this.extend,
+			release: this.release,
+		});
 
 	}
 
@@ -300,24 +292,52 @@ export class RedLock{
 	
 	};
 
+	/** Attempts to release the provided lock */
 	protected async release(lock: Lock){
 
-		removeLockLua;
+		const results = await Promise.allSettled(
+			this.clients.map((client)=>client.eval(removeLockLua, 1, lock.key, lock.uid))
+		);
+
+		for(let i = 0; i < results.length; i++){
+
+			const result = results[i]!;//for TS
+			if(result.status === 'rejected'){
+
+				throw result.reason;
+
+			}
+			
+		}
 
 	};
 
+	/** A helper function to release without an existing `Lock` */
+	protected async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
 
+		try{
 
+			await this.release(new Lock({
+				key,
+				uid,
+				duration: 0,
+				remainingTime: 0,
+				maxHoldTime: 0,
+				extend: this.extend,
+				release: this.release,
+			}));
 
+		}catch(_){ /** noop */ }
 
-	static readonly defaults: {
-		readonly duration: number,
-		readonly autoExtend: false,
-		readonly maxHoldTime: number,
-	} = {
-		duration: 30*1000,//30 sec
-		autoExtend: false,//no
-		maxHoldTime: 60*5*1000//5 min
-	};
+	}
+
+	/** A helper for random retry timeouts */
+	protected async randomSleep(maxMS: number){
+
+		await new Promise((res)=>{
+			setTimeout(res, Math.floor(Math.random() * maxMS));
+		});
+
+	}
 
 }
