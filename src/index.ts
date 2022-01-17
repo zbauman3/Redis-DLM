@@ -4,58 +4,9 @@ import type { Redis as IORedis, Cluster as IORedisCluster } from "ioredis";
 import type { createClient as createRedisClient, createCluster as createRedisCluster } from "redis";
 import RedLockError from "./RedLockError";
 
-/**
- * @see https://redis.io/topics/distlock
- * 
- * N = 5 (Redis instances)
- * 
- * 1. It gets the current time in milliseconds.
- * 2. It tries to acquire the lock in all the N instances sequentially, using
- *    the same key name and random value in all the instances. During step 2,
- *    when setting the lock in each instance, the client uses a timeout which
- *    is small compared to the total lock auto-release time in order to acquire
- *    it. For example if the auto-release time is 10 seconds, the timeout could
- *    be in the ~ 5-50 milliseconds range. This prevents the client from 
- *    remaining blocked for a long time trying to talk with a Redis node which
- *    is down: if an instance is not available, we should try to talk with the
- *    next instance ASAP.
- * 3. The client computes how much time elapsed in order to acquire the lock,
- *    by subtracting from the current time the timestamp obtained in step 1. If
- *    and only if the client was able to acquire the lock in the majority of
- *    the instances (at least 3), and the total time elapsed to acquire the
- *    lock is less than lock validity time, the lock is considered acquired.
- * 4. If the lock was acquired, its validity time is considered to be the
- *    initial validity time minus the time elapsed, as computed in step 3.
- * 5. If the client failed to acquire the lock for some reason (either it was
- *    not able to lock N/2+1 instances or the validity time is negative), it
- *    will try to unlock all the instances (even the instances it believed it
- *    was not able to lock).
- */
-
-
-
-
-
-
-/**
- * @todo
- * 
- * - [ ] Tests
- * - [ ] Docs
- * - [ ] Comments
- * - [ ] Review Errors
- * 
- */
-
-
-
-
-
-
-
-/** Clients or ClusterClients from either ioredis or redis. */
 export type NodeRedisClient = ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
 export type IORedisClient = IORedis | IORedisCluster;
+/** Clients/ClusterClients from either `ioredis` or `redis`. */
 export type RedLockClient = IORedisClient | NodeRedisClient;
 
 /** The settings for a lock. */
@@ -66,26 +17,27 @@ export interface RedLockSettings{
 	retryCount: number,
 	/** The max retry delay in milliseconds. A random time between this and zero will be selected. Default `500`. */
 	retryDelay: number,
-	/** The maximum time in milliseconds that a lock should be held across extensions. Default `300000`. */
+	/** The maximum time in milliseconds that a lock should be held across extensions. Default `60000`. */
 	maxHoldTime: number,
-	/** The percent of the duration that should be used in drift. Between 0 and 1. Default `0.01`. */
+	/** The percent of the duration that should be used as drift, combined with `driftConstant`. Between 0 and 1. Default `0.001`. */
 	driftFactor: number,
-	/** The number of milliseconds added to the drift. Default `2`. */
+	/** The fixed number of milliseconds to be used as drift, combined with `duration*driftFactor`. Default `5`. */
 	driftConstant: number,
 }
 
+/** The default settings if not provided. */
 const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
-	duration: 30*1000,
+	duration: 30000,
 	retryCount: 0,
 	retryDelay: 500,
-	maxHoldTime: 60*5*1000,
-	driftFactor: 0.01,
-	driftConstant: 2,
+	maxHoldTime: 60000,
+	driftFactor: 0.001,
+	driftConstant: 5,
 });
 
 /**
- * This represents a lock and its current state. This essentially just holds
- * the information of the lock and provides utility functions.
+ * This represents a lock and its current state. This holds the information of
+ * the lock and provides utility functions.
  * 
  * All times are in milliseconds.
  */
@@ -102,9 +54,9 @@ export class Lock{
 	public readonly key: string;
 	/** The Redis key's unique value */
 	public readonly uid: string;
-	/** The initial duration, used for extend */
+	/** The initial duration. Used for extending. */
 	public readonly duration: RedLockSettings['duration'];
-	/** Max time to hold the lock across extends. */
+	/** The max time to hold the lock across extends */
 	public readonly maxHoldTime: RedLockSettings['maxHoldTime'];
 	/** The time that this lock started at */
 	public readonly startTime = Date.now();
@@ -147,9 +99,7 @@ export class Lock{
 
 	/**
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
-	 * This does not attempt to remove the lock on failure. \
-	 * If `duration` is not passed here, it will be taken from the original
-	 * `duration`.
+	 * This does not attempt to remove the lock on failure.
 	 */
 	public async extend(settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
@@ -175,7 +125,7 @@ export class RedLock{
 	private readonly clients: RedLockClient[];
 	/** The minimum number of clients who must confirm the lock */
 	private readonly clientConsensus: number;
-	/** The settings for this instance */
+	/** The default settings for this instance */
 	private readonly settings: Readonly<RedLockSettings>;
 
 	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
@@ -196,17 +146,20 @@ export class RedLock{
 			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : defaultSettings.driftConstant),
 		};
 
+		// bind so they can be passed to the Locks
 		this.extend = this.extend.bind(this);
 		this.release = this.release.bind(this);
 
 	};
 
-	/** Attempts to aquire the lock */
+	/** Attempts to aquire the lock. Resolves to a new `Lock` class. */
 	public async aquire(key: string, settings: Partial<RedLockSettings> = {}){
 
 		//step 1.
 		const start = Date.now();
+		//uid via https://redis.io/topics/distlock#correct-implementation-with-a-single-instance
 		const uid = randomBytes(20).toString("hex");
+		//settings for this specific lock
 		const lockSettings: RedLockSettings = {
 			duration: (typeof settings.duration === 'number' ? settings.duration : this.settings.duration),
 			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : this.settings.retryCount),
@@ -216,8 +169,10 @@ export class RedLock{
 			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
 		};
 
+		//if a lock was aquired
 		let success = false;
 
+		//retryCount+1 to include the initial try
 		for(let tries = lockSettings.retryCount+1; tries > 0; tries--){
 
 			//step 2.
@@ -247,8 +202,12 @@ export class RedLock{
 
 			//if there was not a consensus, try removing and wait to retry.
 			await Promise.all([
-				this.noThrowQuickRelease({key, uid}),//step 5.
-				this.randomSleep(lockSettings.retryDelay)
+				//step 5.
+				this.noThrowQuickRelease({key, uid}),
+				//to avoid split brain condition, via https://redis.io/topics/distlock#retry-on-failure
+				new Promise((res)=>{
+					setTimeout(res, Math.floor(Math.random() * lockSettings.retryDelay));
+				})
 			]);
 
 		}
@@ -290,8 +249,11 @@ export class RedLock{
 	};
 
 	/**
-	 * Attempts to extend the lock. This does not attempt to remove the lock on
-	 * failure.
+	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
+	 * This does not attempt to remove the lock on failure. \
+	 * 
+	 * This is meant to be passed to the Locks and called from there. Then
+	 * the lock can update its `expireTime`.
 	 */
 	private async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
@@ -305,16 +267,19 @@ export class RedLock{
 		//how long the lock has already been held
 		const currentHoldTime = (Date.now() - lock.startTime);
 
+		//held for too long
 		if(currentHoldTime >= lock.maxHoldTime){
 			throw new RedLockError('excededMaxHold');
 		}
 
+		//settings for this extend
 		const lockSettings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'> = {
 			duration: (typeof settings.duration === 'number' ? settings.duration : lock.duration),
 			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
 			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
 		};
 
+		//if extending would put it past the max hold time
 		if(currentHoldTime+lockSettings.duration > lock.maxHoldTime){
 			throw new RedLockError('wouldExcededMaxHold');
 		}
@@ -324,6 +289,7 @@ export class RedLock{
 		);
 
 		let successCount = 0;
+
 		for(let i = 0; i < results.length; i++){
 
 			const result = results[i]!;//for TS
@@ -344,6 +310,7 @@ export class RedLock{
 
 		const remainingTime = this.calculateRemainingTime(start, lockSettings);
 
+		//took too long to aquire the lock
 		if(remainingTime <= 0){
 
 			throw new RedLockError('tooLongToAquire');
@@ -454,15 +421,6 @@ export class RedLock{
 			}));
 
 		}catch(_){ /** noop */ }
-
-	};
-
-	/** A helper for random retry timeouts */
-	private async randomSleep(maxMS: number){
-
-		await new Promise((res)=>{
-			setTimeout(res, Math.floor(Math.random() * maxMS));
-		});
 
 	};
 

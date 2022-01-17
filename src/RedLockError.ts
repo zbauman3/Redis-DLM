@@ -8,7 +8,7 @@ export const RedLockErrorMessages = {
 	wouldExcededMaxHold: "This extension would excede the lock's maximum hold time."
 } as const;
 
-export default class RedLockError extends Error {  
+export default class RedLockError extends Error {
 	
 	public constructor(message: keyof typeof RedLockErrorMessages){
 		
