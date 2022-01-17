@@ -44,11 +44,11 @@ const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
 export class Lock{
 
 	/** The time that the lock will expire at */
-	private expireTime = Date.now();
+	protected expireTime = Date.now();
 	/** Bound function from parent. */
-	private readonly _extend: RedLock['extend'];
+	protected readonly _extend: RedLock['extend'];
 	/** Bound function from parent. */
-	private readonly _release: RedLock['release'];
+	protected readonly _release: RedLock['release'];
 
 	/** The Redis key */
 	public readonly key: string;
@@ -116,17 +116,19 @@ export class Lock{
 
 		await this._release(this);
 
+		this.expireTime = Date.now();
+
 	};
 
 }
 
 export class RedLock{
 
-	private readonly clients: RedLockClient[];
+	protected readonly clients: RedLockClient[];
 	/** The minimum number of clients who must confirm the lock */
-	private readonly clientConsensus: number;
+	protected readonly clientConsensus: number;
 	/** The default settings for this instance */
-	private readonly settings: Readonly<RedLockSettings>;
+	protected readonly settings: Readonly<RedLockSettings>;
 
 	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
 
@@ -255,7 +257,7 @@ export class RedLock{
 	 * This is meant to be passed to the Locks and called from there. Then
 	 * the lock can update its `expireTime`.
 	 */
-	private async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
+	protected async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
 		//get the start time to track the time to extend
 		const start = Date.now();
@@ -322,7 +324,7 @@ export class RedLock{
 	};
 
 	/** Attempts to release the provided lock */
-	private async release(lock: Lock){
+	protected async release(lock: Lock){
 
 		const results = await Promise.allSettled(
 			this.clients.map((client)=>this.runLua(client, removeLockLua, [lock.key], [lock.uid]))
@@ -342,7 +344,7 @@ export class RedLock{
 	};
 
 	/** Executes the given Lua & arguments on the provided client */
-	private async runLua(
+	protected async runLua(
 		client: RedLockClient,
 		lua: typeof aquireLockLua | typeof extendLockLua | typeof removeLockLua,
 		keys: string[],
@@ -376,7 +378,7 @@ export class RedLock{
 	};
 
 	/** Calculates the remaining time of a lock, including drift. */
-	private calculateRemainingTime(start: number, settings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
+	protected calculateRemainingTime(start: number, settings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
 
 		//duration - execution time - drift;
 		return Math.floor(settings.duration - (Date.now() - start) - (settings.driftFactor * settings.duration) - settings.driftConstant);
@@ -384,7 +386,7 @@ export class RedLock{
 	};
 
 	/** Checks if a given value is an Error and is a `NOSCRIPT` error. */
-	private isNoScriptError(e: any){
+	protected isNoScriptError(e: any){
 
 		return (
 			(e instanceof Error) &&
@@ -394,7 +396,7 @@ export class RedLock{
 	}
 
 	/** A typeguard for determining which client this is */
-	private isIORedisClient(client: RedLockClient):client is IORedisClient{
+	protected isIORedisClient(client: RedLockClient):client is IORedisClient{
 
 		return (
 			('eval' in client) &&
@@ -406,7 +408,7 @@ export class RedLock{
 	};
 
 	/** A helper function to release without an existing `Lock` */
-	private async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
+	protected async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
 
 		try{
 
