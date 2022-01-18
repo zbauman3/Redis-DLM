@@ -1,13 +1,33 @@
 version: '3.8'
 
+networks:
+  redisNet:
+    driver: bridge
+    internal: false
+    name: redisNet
+    enable_ipv6: false
+
 services:
 
-  #Redis Cluster
+  #NodeJS
+  nodeJS:
+    image: node:16.13.2
+    networks:
+      - redisNet
+    hostname: nodeJS
+    container_name: nodeJS
+    volumes:
+      - ../:/redlock
+    working_dir: /redlock
+    command: "tail -f /dev/null" # keeps it running forever
+
+  #Redis Cluster 1
   redisNode0:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode0
-    ports:
-      - '0.0.0.0:6370:6379'
+    hostname: redisNode0
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
@@ -15,8 +35,9 @@ services:
   redisNode1:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode1
-    ports:
-      - '0.0.0.0:6371:6379'
+    hostname: redisNode1
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
@@ -24,8 +45,9 @@ services:
   redisNode2:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode2
-    ports:
-      - '0.0.0.0:6372:6379'
+    hostname: redisNode2
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
@@ -33,8 +55,9 @@ services:
   redisNode3:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode3
-    ports:
-      - '0.0.0.0:6373:6379'
+    hostname: redisNode3
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
@@ -42,8 +65,9 @@ services:
   redisNode4:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode4
-    ports:
-      - '0.0.0.0:6374:6379'
+    hostname: redisNode4
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
@@ -51,17 +75,19 @@ services:
   redisNode5:
     image: bitnami/redis-cluster:6.2
     container_name: redisNode5
-    ports:
-      - '0.0.0.0:6375:6379'
+    hostname: redisNode5
+    networks:
+      - redisNet
     environment:
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_NODES=redisNode0 redisNode1 redisNode2 redisNode3 redisNode4 redisNode5'
       - 'REDIS_PORT_NUMBER=6379'
-  redisClusterInit:
+  redisClusterInit1:
     image: bitnami/redis-cluster:6.2
-    container_name: redisClusterInit
-    ports:
-      - '0.0.0.0:6376:6379'
+    container_name: redisClusterInit1
+    hostname: redisClusterInit1
+    networks:
+      - redisNet
     depends_on:
       - redisNode0
       - redisNode1
@@ -75,3 +101,205 @@ services:
       - 'REDIS_CLUSTER_CREATOR=yes'
       - 'ALLOW_EMPTY_PASSWORD=yes'
       - 'REDIS_PORT_NUMBER=6379'
+
+  #Redis Cluster 2
+  redisNode6:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode6
+    hostname: redisNode6
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode7:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode7
+    hostname: redisNode7
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode8:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode8
+    hostname: redisNode8
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode9:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode9
+    hostname: redisNode9
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode10:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode10
+    hostname: redisNode10
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode11:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode11
+    hostname: redisNode11
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisClusterInit2:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisClusterInit2
+    hostname: redisClusterInit2
+    networks:
+      - redisNet
+    depends_on:
+      - redisNode6
+      - redisNode7
+      - redisNode8
+      - redisNode9
+      - redisNode10
+      - redisNode11
+    environment:
+      - 'REDIS_CLUSTER_REPLICAS=1'
+      - 'REDIS_NODES=redisNode6 redisNode7 redisNode8 redisNode9 redisNode10 redisNode11'
+      - 'REDIS_CLUSTER_CREATOR=yes'
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_PORT_NUMBER=6379'
+
+  #Redis Cluster 3
+  redisNode12:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode12
+    hostname: redisNode12
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode13:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode13
+    hostname: redisNode13
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode14:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode14
+    hostname: redisNode14
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode15:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode15
+    hostname: redisNode15
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode16:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode16
+    hostname: redisNode16
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisNode17:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisNode17
+    hostname: redisNode17
+    networks:
+      - redisNet
+    environment:
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_PORT_NUMBER=6379'
+  redisClusterInit3:
+    image: bitnami/redis-cluster:6.2
+    container_name: redisClusterInit3
+    hostname: redisClusterInit3
+    networks:
+      - redisNet
+    depends_on:
+      - redisNode12
+      - redisNode13
+      - redisNode14
+      - redisNode15
+      - redisNode16
+      - redisNode17
+    environment:
+      - 'REDIS_CLUSTER_REPLICAS=1'
+      - 'REDIS_NODES=redisNode12 redisNode13 redisNode14 redisNode15 redisNode16 redisNode17'
+      - 'REDIS_CLUSTER_CREATOR=yes'
+      - 'ALLOW_EMPTY_PASSWORD=yes'
+      - 'REDIS_PORT_NUMBER=6379'
+
+  #Redis Instance 0
+  redisInstance0:
+    image: redis:6.2
+    container_name: redisInstance0
+    hostname: redisInstance0
+    networks:
+      - redisNet
+
+  #Redis Instance 1
+  redisInstance1:
+    image: redis:6.2
+    container_name: redisInstance1
+    hostname: redisInstance1
+    networks:
+      - redisNet
+
+  #Redis Instance 2
+  redisInstance2:
+    image: redis:6.2
+    container_name: redisInstance2
+    hostname: redisInstance2
+    networks:
+      - redisNet
+
+  #Redis Instance 3
+  redisInstance3:
+    image: redis:6.2
+    container_name: redisInstance3
+    hostname: redisInstance3
+    networks:
+      - redisNet
+
+  #Redis Instance 4
+  redisInstance4:
+    image: redis:6.2
+    container_name: redisInstance4
+    hostname: redisInstance4
+    networks:
+      - redisNet
