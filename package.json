@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "test": "npx jest",
+    "test": "npx zx ./dist/mgmt/test.js",
     "start-dev-env": "npx zx ./dist/mgmt/dev-env.js start",
     "stop-dev-env": "npx zx ./dist/mgmt/dev-env.js stop",
     "ts-watch": "npx tsc -b --watch ./"
