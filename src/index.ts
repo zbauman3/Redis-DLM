@@ -26,7 +26,7 @@ export interface RedLockSettings{
 }
 
 /** The default settings if not provided. */
-const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
+export const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
 	duration: 30000,
 	retryCount: 0,
 	retryDelay: 500,
@@ -136,7 +136,7 @@ export class RedLock{
 			throw new RedLockError('minClientCount');
 		}
 
-		this.clients = clients;
+		this.clients = [...clients];
 		this.clientConsensus = Math.floor(this.clients.length/2)+1;
 
 		this.settings = {
@@ -202,15 +202,18 @@ export class RedLock{
 
 			}
 
-			//if there was not a consensus, try removing and wait to retry.
-			await Promise.all([
-				//step 5.
-				this.noThrowQuickRelease({key, uid}),
-				//to avoid split brain condition, via https://redis.io/topics/distlock#retry-on-failure
-				new Promise((res)=>{
-					setTimeout(res, Math.floor(Math.random() * lockSettings.retryDelay));
-				})
-			]);
+			//don't do this on the last loop, no need
+			if(tries > 1){
+
+				//if there was not a consensus, try removing and wait to retry.
+				await Promise.all([
+					//step 5.
+					this.noThrowQuickRelease({key, uid}),
+					//to avoid split brain condition, via https://redis.io/topics/distlock#retry-on-failure
+					new Promise((res)=>setTimeout(res, Math.floor(Math.random() * lockSettings.retryDelay)))
+				]);
+
+			}
 
 		}
 
@@ -254,8 +257,8 @@ export class RedLock{
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
 	 * This does not attempt to remove the lock on failure. \
 	 * 
-	 * This is meant to be passed to the Locks and called from there. Then
-	 * the lock can update its `expireTime`.
+	 * This is meant to be bound and passed to the Locks, then called from
+	 * there. The lock can then update its `expireTime`.
 	 */
 	protected async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
@@ -320,7 +323,7 @@ export class RedLock{
 		}
 
 		return remainingTime;
-	
+
 	};
 
 	/** Attempts to release the provided lock */

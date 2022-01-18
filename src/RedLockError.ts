@@ -9,6 +9,8 @@ export const RedLockErrorMessages = {
 } as const;
 
 export default class RedLockError extends Error {
+
+	public messageName: string;
 	
 	public constructor(message: keyof typeof RedLockErrorMessages){
 		
@@ -16,6 +18,7 @@ export default class RedLockError extends Error {
 
 		this.name = 'RedLockError';
 		this.message = RedLockErrorMessages[message];
+		this.messageName = message;
 
 		Error.captureStackTrace(this, this.constructor);
 

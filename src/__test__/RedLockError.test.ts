@@ -9,6 +9,7 @@ describe('Testing RedLockError.ts', ()=>{
 		expect(err instanceof RedLockError).toBe(true);
 		expect(typeof err.name).toBe('string');
 		expect(typeof err.message).toBe('string');
+		expect(err.messageName).toBe('lockNotValid');
 		expect(err.name).toBe('RedLockError');
 
 	});

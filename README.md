@@ -1,5 +1,5 @@
 # node-redlock
-A simple package implementing the RedLock algorithm, using either [node-redis](https://www.npmjs.com/package/redis) or [ioredis](https://www.npmjs.com/package/ioredis) clients.
+A simple Distributed Lock Manager using Redis, implemented with the [RedLock](https://redis.io/topics/distlock) algorithm, using either [node-redis](https://www.npmjs.com/package/redis) or [ioredis](https://www.npmjs.com/package/ioredis) clients.
 
 ## The RedLock algorithm
 A detailed overview of the RedLock algorithm can be read on the [redis.io](https://redis.io/topics/distlock) website. Quoting the site, a general overview is as follows:
