@@ -11,7 +11,7 @@ export type RedLockClient = IORedisClient | NodeRedisClient;
 
 /** The settings for a lock. */
 export interface RedLockSettings{
-	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `30000`. */
+	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `10000`. */
 	duration: number,
 	/** The number of times to retry aquiring a lock. Default `0`. */
 	retryCount: number,
@@ -27,7 +27,7 @@ export interface RedLockSettings{
 
 /** The default settings if not provided. */
 export const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
-	duration: 30000,
+	duration: 10000,
 	retryCount: 0,
 	retryDelay: 500,
 	maxHoldTime: 60000,
@@ -122,7 +122,7 @@ export class Lock{
 
 }
 
-export class RedLock{
+export default class RedLock{
 
 	protected readonly clients: RedLockClient[];
 	/** The minimum number of clients who must confirm the lock */

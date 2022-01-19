@@ -1,4 +1,4 @@
-import { Lock, RedLock, defaultSettings } from "../index";
+import RedLock, { Lock, defaultSettings } from "../index";
 import RedLockError from "../RedLockError";
 import IORedis, { Cluster as IORedisCluster } from "ioredis";
 import { createClient, createCluster } from "redis";

@@ -1,7 +1,7 @@
 {
   "name": "node-redlock",
-  "version": "0.1.0",
-  "description": "A simple package implementing RedLock, using either node-redis or ioredis",
+  "version": "1.0.0",
+  "description": "A simple Distributed Lock Manager for Redis, implemented with the RedLock algorithm, using either node-redis or ioredis clients.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -15,7 +15,7 @@
     "url": "git+https://github.com/zbauman3/node-redlock.git"
   },
   "author": "Zane Bauman",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/zbauman3/node-redlock/issues"
   },
