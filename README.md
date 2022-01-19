@@ -1,18 +1,18 @@
-# node-redlock
-A simple Distributed Lock Manager for Redis, implemented with the [RedLock](https://redis.io/topics/distlock) algorithm, using either [node-redis](https://www.npmjs.com/package/redis) or [ioredis](https://www.npmjs.com/package/ioredis) clients.
+# Redis-DLM
+A Distributed Lock Manager for Redis, implemented with the [RedLock](https://redis.io/topics/distlock) algorithm, using either [node-redis](https://www.npmjs.com/package/redis) or [ioredis](https://www.npmjs.com/package/ioredis) clients.
 
 ## Installation
 
 ```bash
-npm i node-redlock
+npm i redis-dlm
 ```
 
 ## Usage
 ```typescript
-import RedLock from "node-redlock"
+import LockManager from "redis-dlm"
 
 //create a new lock manager
-const lockManager = new RedLock([
+const lockManager = new LockManager([
 	/**
 	 * ioRedis clients, node-redis clients, or a mix.
 	 * Clusters, instances, or a mix.
@@ -44,7 +44,7 @@ await lock.release();
 ## Settings
 You can pass a settings object to the lock manager's constructor, these will be the default settings used across all new locks.
 ```typescript
-const lockManager = new RedLock([
+const lockManager = new LockManager([
 	// ...
 ], {
 	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `10000`. */
@@ -86,7 +86,7 @@ await lock.extend({
 ```
 
 ## Errors
-All errors are generated at the time of function execution, there are no events. A full list of error types can be seen in the [RedLockError class](https://github.com/zbauman3/node-redlock/blob/main/src/RedLockError.ts).
+All errors are generated at the time of function execution, there are no events. A full list of error types can be seen in the [LockManagerError class](https://github.com/zbauman3/Redis-DLM/blob/main/src/LockManagerError.ts).
 
 
 ## The RedLock algorithm

@@ -1,6 +1,6 @@
 {
-  "name": "node-redlock",
-  "version": "1.0.1",
+  "name": "redis-dlm",
+  "version": "1.0.2",
   "description": "A simple Distributed Lock Manager for Redis, implemented with the RedLock algorithm, using either node-redis or ioredis clients.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -12,14 +12,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/zbauman3/node-redlock.git"
+    "url": "git+https://github.com/zbauman3/Redis-DLM.git"
   },
   "author": "Zane Bauman",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/zbauman3/node-redlock/issues"
+    "url": "https://github.com/zbauman3/Redis-DLM/issues"
   },
-  "homepage": "https://github.com/zbauman3/node-redlock#readme",
+  "homepage": "https://github.com/zbauman3/Redis-DLM#readme",
   "keywords": [
     "redlock",
     "dlm",

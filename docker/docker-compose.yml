@@ -17,8 +17,8 @@ services:
     hostname: nodeJS
     container_name: nodeJS
     volumes:
-      - ../:/redlock
-    working_dir: /redlock
+      - ../:/lockManager
+    working_dir: /lockManager
     command: "tail -f /dev/null" # keeps it running forever
 
   #Redis Cluster 1

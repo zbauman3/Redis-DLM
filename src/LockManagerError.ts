@@ -1,5 +1,5 @@
 
-export const RedLockErrorMessages = {
+export const LockManagerErrorMessages = {
 	minClientCount: 'At least one client is required.',
 	noConsensus: 'Failed to aquire a lock consensus.',
 	tooLongToAquire: 'Took too long to aquire the lock.',
@@ -8,16 +8,16 @@ export const RedLockErrorMessages = {
 	wouldExcededMaxHold: "This extension would excede the lock's maximum hold time."
 } as const;
 
-export default class RedLockError extends Error {
+export default class LockManagerError extends Error {
 
 	public messageName: string;
 	
-	public constructor(message: keyof typeof RedLockErrorMessages){
+	public constructor(message: keyof typeof LockManagerErrorMessages){
 		
 		super(message);
 
-		this.name = 'RedLockError';
-		this.message = RedLockErrorMessages[message];
+		this.name = 'LockManagerError';
+		this.message = LockManagerErrorMessages[message];
 		this.messageName = message;
 
 		Error.captureStackTrace(this, this.constructor);

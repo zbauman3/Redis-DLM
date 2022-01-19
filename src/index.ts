@@ -2,15 +2,15 @@ import { randomBytes } from "crypto";
 import { aquireLockLua, extendLockLua, removeLockLua } from "./luaStrings";
 import type { Redis as IORedis, Cluster as IORedisCluster } from "ioredis";
 import type { createClient as createRedisClient, createCluster as createRedisCluster } from "redis";
-import RedLockError from "./RedLockError";
+import LockManagerError from "./LockManagerError";
 
 export type NodeRedisClient = ReturnType<typeof createRedisClient> | ReturnType<typeof createRedisCluster>;
 export type IORedisClient = IORedis | IORedisCluster;
 /** Clients/ClusterClients from either `ioredis` or `redis`. */
-export type RedLockClient = IORedisClient | NodeRedisClient;
+export type LockManagerClient = IORedisClient | NodeRedisClient;
 
 /** The settings for a lock. */
-export interface RedLockSettings{
+export interface LockManagerSettings{
 	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `10000`. */
 	duration: number,
 	/** The number of times to retry aquiring a lock. Default `0`. */
@@ -26,7 +26,7 @@ export interface RedLockSettings{
 }
 
 /** The default settings if not provided. */
-export const defaultSettings: Readonly<RedLockSettings> = Object.freeze({
+export const defaultSettings: Readonly<LockManagerSettings> = Object.freeze({
 	duration: 10000,
 	retryCount: 0,
 	retryDelay: 500,
@@ -46,18 +46,18 @@ export class Lock{
 	/** The time that the lock will expire at */
 	protected expireTime = Date.now();
 	/** Bound function from parent. */
-	protected readonly _extend: RedLock['extend'];
+	protected readonly _extend: LockManager['extend'];
 	/** Bound function from parent. */
-	protected readonly _release: RedLock['release'];
+	protected readonly _release: LockManager['release'];
 
 	/** The Redis key */
 	public readonly key: string;
 	/** The Redis key's unique value */
 	public readonly uid: string;
 	/** The initial duration. Used for extending. */
-	public readonly duration: RedLockSettings['duration'];
+	public readonly duration: LockManagerSettings['duration'];
 	/** The max time to hold the lock across extends */
-	public readonly maxHoldTime: RedLockSettings['maxHoldTime'];
+	public readonly maxHoldTime: LockManagerSettings['maxHoldTime'];
 	/** The time that this lock started at */
 	public readonly startTime = Date.now();
 
@@ -80,11 +80,11 @@ export class Lock{
 	}:{
 		key: string,
 		uid: string,
-		duration: RedLockSettings['duration'],
+		duration: LockManagerSettings['duration'],
 		remainingTime: number,
-		maxHoldTime: RedLockSettings['maxHoldTime'],
-		extend: RedLock['extend'],
-		release: RedLock['release']
+		maxHoldTime: LockManagerSettings['maxHoldTime'],
+		extend: LockManager['extend'],
+		release: LockManager['release']
 	}){
 
 		this.key = key;
@@ -101,7 +101,7 @@ export class Lock{
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
 	 * This does not attempt to remove the lock on failure.
 	 */
-	public async extend(settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
+	public async extend(settings: Partial<Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
 		const remaining = await this._extend(this, settings);
 
@@ -122,18 +122,18 @@ export class Lock{
 
 }
 
-export default class RedLock{
+export default class LockManager{
 
-	protected readonly clients: RedLockClient[];
+	protected readonly clients: LockManagerClient[];
 	/** The minimum number of clients who must confirm the lock */
 	protected readonly clientConsensus: number;
 	/** The default settings for this instance */
-	protected readonly settings: Readonly<RedLockSettings>;
+	protected readonly settings: Readonly<LockManagerSettings>;
 
-	public constructor(clients: RedLockClient[], settings: Partial<RedLockSettings> = {}){
+	public constructor(clients: LockManagerClient[], settings: Partial<LockManagerSettings> = {}){
 
 		if(clients.length === 0){
-			throw new RedLockError('minClientCount');
+			throw new LockManagerError('minClientCount');
 		}
 
 		this.clients = [...clients];
@@ -155,14 +155,14 @@ export default class RedLock{
 	};
 
 	/** Attempts to aquire the lock. Resolves to a new `Lock` class. */
-	public async aquire(key: string, settings: Partial<RedLockSettings> = {}){
+	public async aquire(key: string, settings: Partial<LockManagerSettings> = {}){
 
 		//step 1.
 		const start = Date.now();
 		//uid via https://redis.io/topics/distlock#correct-implementation-with-a-single-instance
 		const uid = randomBytes(20).toString("hex");
 		//settings for this specific lock
-		const lockSettings: RedLockSettings = {
+		const lockSettings: LockManagerSettings = {
 			duration: (typeof settings.duration === 'number' ? settings.duration : this.settings.duration),
 			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : this.settings.retryCount),
 			retryDelay: (typeof settings.retryDelay === 'number' ? settings.retryDelay : this.settings.retryDelay),
@@ -223,7 +223,7 @@ export default class RedLock{
 			//step 5.
 			await this.noThrowQuickRelease({key, uid});
 
-			throw new RedLockError('noConsensus');
+			throw new LockManagerError('noConsensus');
 
 		}
 
@@ -236,7 +236,7 @@ export default class RedLock{
 			//step 5.
 			await this.noThrowQuickRelease({key, uid});
 
-			throw new RedLockError('tooLongToAquire');
+			throw new LockManagerError('tooLongToAquire');
 
 		}
 
@@ -260,13 +260,13 @@ export default class RedLock{
 	 * This is meant to be bound and passed to the Locks, then called from
 	 * there. The lock can then update its `expireTime`.
 	 */
-	protected async extend(lock: Lock, settings: Partial<Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
+	protected async extend(lock: Lock, settings: Partial<Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'>> = {}){
 
 		//get the start time to track the time to extend
 		const start = Date.now();
 
 		if(lock.remainingTime === 0){
-			throw new RedLockError('lockNotValid');
+			throw new LockManagerError('lockNotValid');
 		}
 
 		//how long the lock has already been held
@@ -274,11 +274,11 @@ export default class RedLock{
 
 		//held for too long
 		if(currentHoldTime >= lock.maxHoldTime){
-			throw new RedLockError('excededMaxHold');
+			throw new LockManagerError('excededMaxHold');
 		}
 
 		//settings for this extend
-		const lockSettings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'> = {
+		const lockSettings: Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'> = {
 			duration: (typeof settings.duration === 'number' ? settings.duration : lock.duration),
 			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
 			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
@@ -286,7 +286,7 @@ export default class RedLock{
 
 		//if extending would put it past the max hold time
 		if(currentHoldTime+lockSettings.duration > lock.maxHoldTime){
-			throw new RedLockError('wouldExcededMaxHold');
+			throw new LockManagerError('wouldExcededMaxHold');
 		}
 
 		const results = await Promise.allSettled(
@@ -309,7 +309,7 @@ export default class RedLock{
 		//check if there was a consensus on the lock.
 		if(successCount < this.clientConsensus){
 			
-			throw new RedLockError('noConsensus');
+			throw new LockManagerError('noConsensus');
 
 		}
 
@@ -318,7 +318,7 @@ export default class RedLock{
 		//took too long to aquire the lock
 		if(remainingTime <= 0){
 
-			throw new RedLockError('tooLongToAquire');
+			throw new LockManagerError('tooLongToAquire');
 
 		}
 
@@ -348,7 +348,7 @@ export default class RedLock{
 
 	/** Executes the given Lua & arguments on the provided client */
 	protected async runLua(
-		client: RedLockClient,
+		client: LockManagerClient,
 		lua: typeof aquireLockLua | typeof extendLockLua | typeof removeLockLua,
 		keys: string[],
 		argv: string[]
@@ -381,7 +381,7 @@ export default class RedLock{
 	};
 
 	/** Calculates the remaining time of a lock, including drift. */
-	protected calculateRemainingTime(start: number, settings: Pick<RedLockSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
+	protected calculateRemainingTime(start: number, settings: Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
 
 		//duration - execution time - drift;
 		return Math.floor(settings.duration - (Date.now() - start) - (settings.driftFactor * settings.duration) - settings.driftConstant);
@@ -399,7 +399,7 @@ export default class RedLock{
 	}
 
 	/** A typeguard for determining which client this is */
-	protected isIORedisClient(client: RedLockClient):client is IORedisClient{
+	protected isIORedisClient(client: LockManagerClient):client is IORedisClient{
 
 		return (
 			('eval' in client) &&

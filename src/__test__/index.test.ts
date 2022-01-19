@@ -1,5 +1,5 @@
-import RedLock, { Lock, defaultSettings } from "../index";
-import RedLockError from "../RedLockError";
+import LockManager, { Lock, defaultSettings } from "../index";
+import LockManagerError from "../LockManagerError";
 import IORedis, { Cluster as IORedisCluster } from "ioredis";
 import { createClient, createCluster } from "redis";
 import { randomBytes } from "crypto";
@@ -19,21 +19,21 @@ class TestLock extends Lock{
 
 //Updated with public versions for testing.
 //Added mocks for checking if functions were called/mocking results.
-class TestRedLock extends RedLock{
+class TestLockManager extends LockManager{
 
 	public get pub_clients(){ return this.clients; }
 	public get pub_clientConsensus(){ return this.clientConsensus; }
 	public get pub_settings(){ return this.settings; }
 
-	public pub_extend: jest.Mock<ReturnType<RedLock['extend']>, Parameters<RedLock['extend']>>;
-	public pub_release: jest.Mock<ReturnType<RedLock['release']>, Parameters<RedLock['release']>>;
-	public pub_runLua: jest.Mock<ReturnType<RedLock['runLua']>, Parameters<RedLock['runLua']>>;
-	public pub_calculateRemainingTime: jest.Mock<ReturnType<RedLock['calculateRemainingTime']>, Parameters<RedLock['calculateRemainingTime']>>;
-	public pub_isNoScriptError: jest.Mock<ReturnType<RedLock['isNoScriptError']>, Parameters<RedLock['isNoScriptError']>>;
-	public pub_isIORedisClient: jest.Mock<ReturnType<RedLock['isIORedisClient']>, Parameters<RedLock['isIORedisClient']>>;
-	public pub_noThrowQuickRelease: jest.Mock<ReturnType<RedLock['noThrowQuickRelease']>, Parameters<RedLock['noThrowQuickRelease']>>;
+	public pub_extend: jest.Mock<ReturnType<LockManager['extend']>, Parameters<LockManager['extend']>>;
+	public pub_release: jest.Mock<ReturnType<LockManager['release']>, Parameters<LockManager['release']>>;
+	public pub_runLua: jest.Mock<ReturnType<LockManager['runLua']>, Parameters<LockManager['runLua']>>;
+	public pub_calculateRemainingTime: jest.Mock<ReturnType<LockManager['calculateRemainingTime']>, Parameters<LockManager['calculateRemainingTime']>>;
+	public pub_isNoScriptError: jest.Mock<ReturnType<LockManager['isNoScriptError']>, Parameters<LockManager['isNoScriptError']>>;
+	public pub_isIORedisClient: jest.Mock<ReturnType<LockManager['isIORedisClient']>, Parameters<LockManager['isIORedisClient']>>;
+	public pub_noThrowQuickRelease: jest.Mock<ReturnType<LockManager['noThrowQuickRelease']>, Parameters<LockManager['noThrowQuickRelease']>>;
 
-	public constructor(...a: ConstructorParameters<typeof RedLock>){
+	public constructor(...a: ConstructorParameters<typeof LockManager>){
 
 		super(...a);
 
@@ -53,7 +53,7 @@ class TestRedLock extends RedLock{
 		this.isNoScriptError = this.pub_isNoScriptError;
 
 		this.pub_isIORedisClient = jest.fn(this.isIORedisClient.bind(this));
-		this.isIORedisClient = this.pub_isIORedisClient as unknown as RedLock['isIORedisClient'];//no other good way to do this one
+		this.isIORedisClient = this.pub_isIORedisClient as unknown as LockManager['isIORedisClient'];//no other good way to do this one
 
 		this.pub_noThrowQuickRelease = jest.fn(this.noThrowQuickRelease.bind(this));
 		this.noThrowQuickRelease = this.pub_noThrowQuickRelease;
@@ -67,7 +67,7 @@ describe('Lock', ()=>{
 	//to share between mocks and classes
 	const remainingTime = 95;
 
-	//mock functions instead of passing anything from a RedLock class
+	//mock functions instead of passing anything from a LockManager class
 	const extendFn = jest.fn<ReturnType<ConstructorParameters<typeof Lock>[0]['extend']>, Parameters<ConstructorParameters<typeof Lock>[0]['extend']>>(async ()=>remainingTime);
 	const releaseFn = jest.fn<ReturnType<ConstructorParameters<typeof Lock>[0]['release']>, Parameters<ConstructorParameters<typeof Lock>[0]['release']>>(async ()=>{});
 
@@ -127,7 +127,7 @@ describe('Lock', ()=>{
 
 });
 
-describe('RedLock', ()=>{
+describe('LockManager', ()=>{
 
 	const ioRedisClusterClients: InstanceType<typeof IORedisCluster>[] = [];
 	const ioRedisInstanceClients: InstanceType<typeof IORedis>[] = [];
@@ -288,18 +288,18 @@ describe('RedLock', ()=>{
 		test(`Init values are set - ${name}`, async ()=>{
 
 			//test clients, consensus, default settings
-			const redlock1 = new TestRedLock(clients);
-			expect(redlock1.pub_clients).toHaveLength(clients.length);
-			expect(redlock1.pub_clientConsensus).toBe( Math.floor(clients.length/2)+1 );
-			expect(redlock1.pub_settings.duration).toBe(defaultSettings.duration);
-			expect(redlock1.pub_settings.retryCount).toBe(defaultSettings.retryCount);
-			expect(redlock1.pub_settings.retryDelay).toBe(defaultSettings.retryDelay);
-			expect(redlock1.pub_settings.maxHoldTime).toBe(defaultSettings.maxHoldTime);
-			expect(redlock1.pub_settings.driftFactor).toBe(defaultSettings.driftFactor);
-			expect(redlock1.pub_settings.driftConstant).toBe(defaultSettings.driftConstant);
+			const lockManager1 = new TestLockManager(clients);
+			expect(lockManager1.pub_clients).toHaveLength(clients.length);
+			expect(lockManager1.pub_clientConsensus).toBe( Math.floor(clients.length/2)+1 );
+			expect(lockManager1.pub_settings.duration).toBe(defaultSettings.duration);
+			expect(lockManager1.pub_settings.retryCount).toBe(defaultSettings.retryCount);
+			expect(lockManager1.pub_settings.retryDelay).toBe(defaultSettings.retryDelay);
+			expect(lockManager1.pub_settings.maxHoldTime).toBe(defaultSettings.maxHoldTime);
+			expect(lockManager1.pub_settings.driftFactor).toBe(defaultSettings.driftFactor);
+			expect(lockManager1.pub_settings.driftConstant).toBe(defaultSettings.driftConstant);
 
 			//custom settings
-			const redlock2 = new TestRedLock(clients, {
+			const lockManager2 = new TestLockManager(clients, {
 				duration: 5,
 				retryCount: 4,
 				retryDelay: 3,
@@ -307,25 +307,25 @@ describe('RedLock', ()=>{
 				driftFactor: 1,
 				driftConstant: 0,
 			});
-			expect(redlock2.pub_settings.duration).toBe(5);
-			expect(redlock2.pub_settings.retryCount).toBe(4);
-			expect(redlock2.pub_settings.retryDelay).toBe(3);
-			expect(redlock2.pub_settings.maxHoldTime).toBe(2);
-			expect(redlock2.pub_settings.driftFactor).toBe(1);
-			expect(redlock2.pub_settings.driftConstant).toBe(0);
+			expect(lockManager2.pub_settings.duration).toBe(5);
+			expect(lockManager2.pub_settings.retryCount).toBe(4);
+			expect(lockManager2.pub_settings.retryDelay).toBe(3);
+			expect(lockManager2.pub_settings.maxHoldTime).toBe(2);
+			expect(lockManager2.pub_settings.driftFactor).toBe(1);
+			expect(lockManager2.pub_settings.driftConstant).toBe(0);
 
 		});
 
 		test(`aquire - Single try - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			clients.forEach(()=>{
-				redlock.pub_runLua.mockResolvedValueOnce('OK');
+				lockManager.pub_runLua.mockResolvedValueOnce('OK');
 			});
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await redlock.aquire(randomKey, {
+			const res = await lockManager.aquire(randomKey, {
 				duration: 12345,
 				maxHoldTime: 67890
 			});
@@ -337,321 +337,321 @@ describe('RedLock', ()=>{
 			expect(res.maxHoldTime).toBe(67890);
 			expect(res.startTime).toBeLessThanOrEqual(Date.now());
 			expect(res.remainingTime).toBeLessThanOrEqual(res.duration);
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_noThrowQuickRelease).toHaveBeenCalledTimes(0);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`aquire - Three tries, first two fail. - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			for (let i = 1; i <= clients.length*3; i++) {
 
 				if(i <= clients.length*2){
-					redlock.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
+					lockManager.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
 				}else{
-					redlock.pub_runLua.mockResolvedValueOnce('OK');
+					lockManager.pub_runLua.mockResolvedValueOnce('OK');
 				}
 				
 			}
 
-			redlock.pub_noThrowQuickRelease.mockResolvedValueOnce();
-			redlock.pub_noThrowQuickRelease.mockResolvedValueOnce();
+			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
+			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await redlock.aquire(randomKey, {
+			const res = await lockManager.aquire(randomKey, {
 				retryCount: 2
 			});
 
 			expect(res).toBeInstanceOf(Lock);
 			expect(res.key).toBe(randomKey);
 			expect(typeof res.uid).toBe('string');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length*3);
-			expect(redlock.pub_noThrowQuickRelease).toHaveBeenCalledTimes(2);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length*3);
+			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(2);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`aquire - Single try, minimum consensus. - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			for(let i = 1; i <= clients.length; i++){
 
 				if(i < Math.floor(clients.length/2)+1){
-					redlock.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
+					lockManager.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
 				}else{
-					redlock.pub_runLua.mockResolvedValueOnce('OK');
+					lockManager.pub_runLua.mockResolvedValueOnce('OK');
 				}
 
 			}
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await redlock.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.aquire(randomKey).catch((e)=>e);
 
 			expect(res).toBeInstanceOf(Lock);
 			expect(res.key).toBe(randomKey);
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_noThrowQuickRelease).toHaveBeenCalledTimes(0);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`aquire - Single try, no consensus. - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			for(let i = 1; i <= clients.length; i++){
 
 				if(i <= Math.floor(clients.length/2)+1){
-					redlock.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
+					lockManager.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
 				}else{
-					redlock.pub_runLua.mockResolvedValueOnce('OK');
+					lockManager.pub_runLua.mockResolvedValueOnce('OK');
 				}
 				
 			}
 
-			redlock.pub_noThrowQuickRelease.mockResolvedValueOnce();
+			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await redlock.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.aquire(randomKey).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('noConsensus');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_noThrowQuickRelease).toHaveBeenCalledTimes(1);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
 
 		});
 
 		test(`aquire - Single try, took too long. - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			for(let i = 1; i <= clients.length; i++){
-				redlock.pub_runLua.mockResolvedValueOnce('OK');
+				lockManager.pub_runLua.mockResolvedValueOnce('OK');
 			}
 
-			redlock.pub_calculateRemainingTime.mockReturnValueOnce(0);
-			redlock.pub_noThrowQuickRelease.mockResolvedValueOnce();
+			lockManager.pub_calculateRemainingTime.mockReturnValueOnce(0);
+			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await redlock.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.aquire(randomKey).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('tooLongToAquire');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_noThrowQuickRelease).toHaveBeenCalledTimes(1);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`extend - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
-				remainingTime: redlock.pub_calculateRemainingTime(Date.now(), defaultSettings),
+				remainingTime: lockManager.pub_calculateRemainingTime(Date.now(), defaultSettings),
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.maxHoldTime,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
 			//because it was called above
-			redlock.pub_calculateRemainingTime.mockClear();
+			lockManager.pub_calculateRemainingTime.mockClear();
 
 			clients.forEach(()=>{
-				redlock.pub_runLua.mockResolvedValueOnce(1);
+				lockManager.pub_runLua.mockResolvedValueOnce(1);
 			});
 
-			const res = await redlock.pub_extend(lock);
+			const res = await lockManager.pub_extend(lock);
 
 			expect(typeof res).toBe('number');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`extend - No remaining time - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: 0,
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.maxHoldTime,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
-			const res = await redlock.pub_extend(lock).catch((e)=>e);
+			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('lockNotValid');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(0);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
 
 		});
 
 		test(`extend - Over max hold time - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: defaultSettings.duration,
 				duration: defaultSettings.duration,
 				maxHoldTime: 0,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
-			const res = await redlock.pub_extend(lock).catch((e)=>e);
+			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('excededMaxHold');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(0);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
 
 		});
 
 		test(`extend - Would excede max hold time - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: defaultSettings.duration,
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.duration-1,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
-			const res = await redlock.pub_extend(lock).catch((e)=>e);
+			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('wouldExcededMaxHold');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(0);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
 
 		});
 
 		test(`extend - No consensus -  ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: defaultSettings.duration,
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.maxHoldTime,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
 			for(let i = 1; i <= clients.length; i++){
 
 				if(i <= Math.floor(clients.length/2)+1){
-					redlock.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
+					lockManager.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
 				}else{
-					redlock.pub_runLua.mockResolvedValueOnce(1);
+					lockManager.pub_runLua.mockResolvedValueOnce(1);
 				}
 				
 			}
 
-			const res = await redlock.pub_extend(lock).catch((e)=>e);
+			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('noConsensus');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(0);
 
 		});
 
 		test(`extend - Minimum consensus -  ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: defaultSettings.duration,
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.maxHoldTime,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
 			for(let i = 1; i <= clients.length; i++){
 
 				if(i < Math.floor(clients.length/2)+1){
-					redlock.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
+					lockManager.pub_runLua.mockRejectedValueOnce(new Error('Fail'));
 				}else{
-					redlock.pub_runLua.mockResolvedValueOnce(1);
+					lockManager.pub_runLua.mockResolvedValueOnce(1);
 				}
 				
 			}
 
-			const res = await redlock.pub_extend(lock);
+			const res = await lockManager.pub_extend(lock);
 
 			expect(typeof res).toBe('number');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`extend - Took too long - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 			const lock = new TestLock({
 				key: randomBytes(20).toString("hex"),
 				uid: randomBytes(20).toString("hex"),
 				remainingTime: defaultSettings.duration,
 				duration: defaultSettings.duration,
 				maxHoldTime: defaultSettings.maxHoldTime,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			});
 
 			clients.forEach(()=>{
-				redlock.pub_runLua.mockResolvedValueOnce(1);
+				lockManager.pub_runLua.mockResolvedValueOnce(1);
 			});
 
-			redlock.pub_calculateRemainingTime.mockReturnValueOnce(0);
+			lockManager.pub_calculateRemainingTime.mockReturnValueOnce(0);
 
-			const res = await redlock.pub_extend(lock).catch((e)=>e);
+			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
-			expect(res).toBeInstanceOf(RedLockError);
+			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('tooLongToAquire');
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
-			expect(redlock.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
 		});
 
 		test(`release - ${name}`, async ()=>{
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			clients.forEach(()=>{
-				redlock.pub_runLua.mockResolvedValueOnce('Deleted');
+				lockManager.pub_runLua.mockResolvedValueOnce('Deleted');
 			});
 
-			await redlock.pub_release(new Lock({
+			await lockManager.pub_release(new Lock({
 				key: '123',
 				uid: '456',
 				remainingTime: 0,
 				duration: 0,
 				maxHoldTime: 0,
-				extend: redlock.pub_extend.bind(redlock),
-				release: redlock.pub_release.bind(redlock),
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
 			}));
 
-			expect(redlock.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
 
 		});
 
@@ -661,13 +661,13 @@ describe('RedLock', ()=>{
 			const testLuaScript = `local test = "${randomBytes(20).toString("hex")}"; return redis.status_reply("OK")`;
 			const testLuaSha1 = createHash("sha1").update(testLuaScript).digest("hex");
 
-			const redlock = new TestRedLock(clients);
+			const lockManager = new TestLockManager(clients);
 
 			for(let i = 0; i < clients.length; i++){
 
 				//clear these so i can check them each loop
-				redlock.pub_isIORedisClient.mockClear();
-				redlock.pub_isNoScriptError.mockClear();
+				lockManager.pub_isIORedisClient.mockClear();
+				lockManager.pub_isNoScriptError.mockClear();
 
 				const client = clients[i]!;
 
@@ -684,14 +684,14 @@ describe('RedLock', ()=>{
 					: jest.spyOn(client, 'evalSha')
 				);
 
-				const res1 = await redlock.pub_runLua(client, {script: testLuaScript, sha1: testLuaSha1}, [], []);
+				const res1 = await lockManager.pub_runLua(client, {script: testLuaScript, sha1: testLuaSha1}, [], []);
 
 				expect(res1).toBe('OK');
 				expect(evalshaSpy).toHaveBeenCalledTimes(1);
 				expect(evalSpy).toHaveBeenCalledTimes(1);
-				expect(redlock.pub_isIORedisClient).toHaveBeenCalledTimes(2);
-				expect(redlock.pub_isNoScriptError).toHaveBeenCalledTimes(1);
-				expect(redlock.pub_isNoScriptError.mock.results[0]?.value).toBe(true);
+				expect(lockManager.pub_isIORedisClient).toHaveBeenCalledTimes(2);
+				expect(lockManager.pub_isNoScriptError).toHaveBeenCalledTimes(1);
+				expect(lockManager.pub_isNoScriptError.mock.results[0]?.value).toBe(true);
 
 				/**
 				 * @todo this can't be done directly on cluster. The script is not replicated to all nodes...
@@ -699,13 +699,13 @@ describe('RedLock', ()=>{
 				 */
 				if(name !== 'ioRedisClusterClients' && name !== 'nodeRedisClusterClients'){
 
-					const res2 = await redlock.pub_runLua(client, {script: testLuaScript, sha1: testLuaSha1}, [], []);
+					const res2 = await lockManager.pub_runLua(client, {script: testLuaScript, sha1: testLuaSha1}, [], []);
 	
 					expect(res2).toBe('OK');
 					expect(evalshaSpy).toHaveBeenCalledTimes(2);
 					expect(evalSpy).toHaveBeenCalledTimes(1);
-					expect(redlock.pub_isIORedisClient).toHaveBeenCalledTimes(3);
-					expect(redlock.pub_isNoScriptError).toHaveBeenCalledTimes(1);
+					expect(lockManager.pub_isIORedisClient).toHaveBeenCalledTimes(3);
+					expect(lockManager.pub_isNoScriptError).toHaveBeenCalledTimes(1);
 
 
 				}
@@ -729,53 +729,53 @@ describe('RedLock', ()=>{
 
 		test(`isNoScriptError - ${name}`, async ()=>{
 
-			const redlock1 = new TestRedLock(clients);
+			const lockManager1 = new TestLockManager(clients);
 
-			expect(redlock1.pub_isNoScriptError(new Error('NOSCRIPT'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('this is a NOSCRIPT'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('NOSCRIPT error'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('this a NOSCRIPT error'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('noscript'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('this is a noscript'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('noscript error'))).toBe(true);
-			expect(redlock1.pub_isNoScriptError(new Error('this a noscript error'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('NOSCRIPT'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('this is a NOSCRIPT'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('NOSCRIPT error'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('this a NOSCRIPT error'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('noscript'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('this is a noscript'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('noscript error'))).toBe(true);
+			expect(lockManager1.pub_isNoScriptError(new Error('this a noscript error'))).toBe(true);
 
-			expect(redlock1.pub_isNoScriptError('this is a error')).toBe(false);
-			expect(redlock1.pub_isNoScriptError(new Error('this is a error'))).toBe(false);
+			expect(lockManager1.pub_isNoScriptError('this is a error')).toBe(false);
+			expect(lockManager1.pub_isNoScriptError(new Error('this is a error'))).toBe(false);
 
 		});
 
 		test(`isIORedisClient - ${name}`, async ()=>{
 
-			const redlock1 = new TestRedLock(clients);
-			expect(redlock1.pub_isIORedisClient(clients[0]!)).toBe(name === 'ioRedisClusterClients' || name === 'ioRedisInstanceClients' ? true : false);
+			const lockManager1 = new TestLockManager(clients);
+			expect(lockManager1.pub_isIORedisClient(clients[0]!)).toBe(name === 'ioRedisClusterClients' || name === 'ioRedisInstanceClients' ? true : false);
 
 		});
 
 		test(`noThrowQuickRelease - ${name}`, async ()=>{
 
-			const redlock1 = new TestRedLock(clients);
+			const lockManager1 = new TestLockManager(clients);
 
 			//resolves
-			redlock1.pub_release.mockResolvedValueOnce();
-			await redlock1.pub_noThrowQuickRelease({key: '123', uid: '456'});
+			lockManager1.pub_release.mockResolvedValueOnce();
+			await lockManager1.pub_noThrowQuickRelease({key: '123', uid: '456'});
 
-			expect(redlock1.pub_release).toHaveBeenCalledTimes(1);
+			expect(lockManager1.pub_release).toHaveBeenCalledTimes(1);
 
 			//rejects
-			redlock1.pub_release.mockRejectedValueOnce(new Error('Something'));
-			await redlock1.pub_noThrowQuickRelease({key: '123', uid: '456'});
+			lockManager1.pub_release.mockRejectedValueOnce(new Error('Something'));
+			await lockManager1.pub_noThrowQuickRelease({key: '123', uid: '456'});
 
-			expect(redlock1.pub_release).toHaveBeenCalledTimes(2);
+			expect(lockManager1.pub_release).toHaveBeenCalledTimes(2);
 
 		});
 
 		test(`Complete - ${name}`, async ()=>{
 
-			const redlock = new RedLock(clients);
+			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock = await redlock.aquire(randomKey, {  
+			const lock = await lockManager.aquire(randomKey, {  
 				duration: 15*1000
 			});
 
@@ -796,10 +796,10 @@ describe('RedLock', ()=>{
 
 			expect.assertions(5);
 
-			const redlock = new RedLock(clients);
+			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock1 = await redlock.aquire(randomKey, {
+			const lock1 = await lockManager.aquire(randomKey, {
 				duration: 2*1000
 			});
 
@@ -808,18 +808,18 @@ describe('RedLock', ()=>{
 
 			try{
 
-				await redlock.aquire(randomKey);
+				await lockManager.aquire(randomKey);
 
 			}catch(e){
 
-				expect(e).toBeInstanceOf(RedLockError);
-				expect((e as RedLockError).messageName).toBe('noConsensus');
+				expect(e).toBeInstanceOf(LockManagerError);
+				expect((e as LockManagerError).messageName).toBe('noConsensus');
 
 			}
 
 			await new Promise((res)=>setTimeout(res, lock1.remainingTime+1000));
 
-			const lock2 = await redlock.aquire(randomKey);
+			const lock2 = await lockManager.aquire(randomKey);
 
 			expect(lock2.key).toBe(randomKey);
 
@@ -829,10 +829,10 @@ describe('RedLock', ()=>{
 
 			expect.assertions(5);
 
-			const redlock = new RedLock(clients);
+			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock1 = await redlock.aquire(randomKey, {
+			const lock1 = await lockManager.aquire(randomKey, {
 				duration: 2*1000
 			});
 
@@ -841,18 +841,18 @@ describe('RedLock', ()=>{
 
 			try{
 
-				await redlock.aquire(randomKey);
+				await lockManager.aquire(randomKey);
 
 			}catch(e){
 
-				expect(e).toBeInstanceOf(RedLockError);
-				expect((e as RedLockError).messageName).toBe('noConsensus');
+				expect(e).toBeInstanceOf(LockManagerError);
+				expect((e as LockManagerError).messageName).toBe('noConsensus');
 
 			}
 
 			await new Promise((res)=>setTimeout(res, lock1.remainingTime));
 
-			const lock2 = await redlock.aquire(randomKey, {
+			const lock2 = await lockManager.aquire(randomKey, {
 				retryCount: 5
 			});
 
