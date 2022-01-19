@@ -9,7 +9,7 @@ npm i node-redlock
 
 ## Usage
 ```typescript
-import RedLock from `node-redlock`
+import RedLock from "node-redlock"
 
 //create a new lock manager
 const lockManager = new RedLock([
@@ -42,7 +42,7 @@ await lock.release();
 ```
 
 ## Settings
-You can pass a settings object to the constructor, this will be the default settings used across all new locks.
+You can pass a settings object to the lock manager's constructor, these will be the default settings used across all new locks.
 ```typescript
 const lockManager = new RedLock([
 	// ...
@@ -61,7 +61,7 @@ const lockManager = new RedLock([
 	driftConstant: 5,
 });
 ```
-You can also pass the same settings object to `aquire`, this will be used as the settings for only this lock.
+You can also pass the same settings object to `aquire`, these will be used as the settings for only this lock.
 ```typescript
 // ...
 
@@ -74,7 +74,7 @@ const lock = await lockManager.aquire('myKey', {
 	driftConstant: 5,
 });
 ```
-Last, you can pass a subset of the settings object to `extend`, this will only be used during this extend. If you do not pass `duration`, the lock's original duration will be used. If you do not pass `driftFactor` or `driftConstant` the default values from the lock manager will be used.
+Last, you can pass a subset of the settings object to `extend`, these will only be used during this extend. If you do not pass `duration`, the lock's original duration will be used. If you do not pass `driftFactor` or `driftConstant` the default values from the lock manager will be used.
 ```typescript
 // ...
 
@@ -106,7 +106,7 @@ This library makes some minor changes to the algorithm, notably:
 4. Auto retries are implemented, as described in the ["Retry on failure"](https://redis.io/topics/distlock#retry-on-failure) section.
 
 ## Fault Tolerance
-If absolute exclusivity is desired for a lock, even after an instance/node crash, extra settings are required for restarting/promoting instances/nodes. See the [Performance, crash-recovery and fsync](https://redis.io/topics/distlock#performance-crash-recovery-and-fsync) section of the RedLock documentation for more info.
+If absolute exclusivity is desired for a lock, even after an instance/node crash, extra settings are required for restarting/promoting instances/nodes. See the ["Performance, crash-recovery and fsync"](https://redis.io/topics/distlock#performance-crash-recovery-and-fsync) section of the RedLock documentation for more info.
 
 ## Support
 Currently this has only been tested on Node.js `16.3.x`. More tests are to come and this section will be updated as I test them.

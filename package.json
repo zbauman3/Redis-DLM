@@ -1,6 +1,6 @@
 {
   "name": "node-redlock",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple Distributed Lock Manager for Redis, implemented with the RedLock algorithm, using either node-redis or ioredis clients.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -20,6 +20,14 @@
     "url": "https://github.com/zbauman3/node-redlock/issues"
   },
   "homepage": "https://github.com/zbauman3/node-redlock#readme",
+  "keywords": [
+    "redlock",
+    "dlm",
+    "distributed",
+    "lock",
+    "manager",
+    "redis"
+  ],
   "devDependencies": {
     "@types/ioredis": "^4.28.7",
     "@types/jest": "^27.4.0",
