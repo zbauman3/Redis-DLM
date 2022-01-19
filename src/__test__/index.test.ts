@@ -6,7 +6,7 @@ import { randomBytes } from "crypto";
 import { createHash } from "crypto";
 
 //Running inside docker, so somtimes these are slow.
-jest.setTimeout(60*1000);
+jest.setTimeout(60*2*1000);
 
 //Updated with public versions for testing
 class TestLock extends Lock{
@@ -668,8 +668,14 @@ describe('RedLock', ()=>{
 				//clear these so i can check them each loop
 				redlock.pub_isIORedisClient.mockClear();
 				redlock.pub_isNoScriptError.mockClear();
-				
+
 				const client = clients[i]!;
+
+				const originalEval = client.eval;
+				const originalEvalsha = ('evalsha' in client
+					? client.evalsha
+					: client.evalSha
+				);
 
 				//mock the client so i can validate what is called
 				const evalSpy = jest.spyOn(client, 'eval');
@@ -677,7 +683,7 @@ describe('RedLock', ()=>{
 					? jest.spyOn(client, 'evalsha')
 					: jest.spyOn(client, 'evalSha')
 				);
-				
+
 				const res1 = await redlock.pub_runLua(client, {script: testLuaScript, sha1: testLuaSha1}, [], []);
 
 				expect(res1).toBe('OK');
@@ -706,6 +712,16 @@ describe('RedLock', ()=>{
 
 				evalSpy.mockReset();
 				evalshaSpy.mockReset();
+
+				//I was having issue where the mock was not resetting. This fixes it.
+				client.eval = originalEval;
+				if('evalsha' in client){
+					//@ts-ignore
+					client.evalsha = originalEvalsha;
+				}else{
+					//@ts-ignore
+					client.evalSha = originalEvalsha;
+				}
 				
 			}
 
@@ -751,6 +767,96 @@ describe('RedLock', ()=>{
 			await redlock1.pub_noThrowQuickRelease({key: '123', uid: '456'});
 
 			expect(redlock1.pub_release).toHaveBeenCalledTimes(2);
+
+		});
+
+		test(`Complete - ${name}`, async ()=>{
+
+			const redlock = new RedLock(clients);
+			const randomKey = randomBytes(20).toString("hex");
+
+			const lock = await redlock.aquire(randomKey, {  
+				duration: 15*1000
+			});
+
+			expect(lock.key).toBe(randomKey);
+			expect(lock.remainingTime).toBeGreaterThanOrEqual(14*1000);
+
+			await lock.extend({
+				duration: 20*1000
+			});
+
+			expect(lock.remainingTime).toBeGreaterThanOrEqual(19*1000);
+
+			await lock.release();
+
+		});
+
+		test(`Complete - conflicting locks, no retry - ${name}`, async ()=>{
+
+			expect.assertions(5);
+
+			const redlock = new RedLock(clients);
+			const randomKey = randomBytes(20).toString("hex");
+
+			const lock1 = await redlock.aquire(randomKey, {
+				duration: 2*1000
+			});
+
+			expect(lock1.key).toBe(randomKey);
+			expect(lock1.remainingTime).toBeGreaterThanOrEqual(1000);
+
+			try{
+
+				await redlock.aquire(randomKey);
+
+			}catch(e){
+
+				expect(e).toBeInstanceOf(RedLockError);
+				expect((e as RedLockError).messageName).toBe('noConsensus');
+
+			}
+
+			await new Promise((res)=>setTimeout(res, lock1.remainingTime+1000));
+
+			const lock2 = await redlock.aquire(randomKey);
+
+			expect(lock2.key).toBe(randomKey);
+
+		});
+
+		test(`Complete - conflicting locks, retries - ${name}`, async ()=>{
+
+			expect.assertions(5);
+
+			const redlock = new RedLock(clients);
+			const randomKey = randomBytes(20).toString("hex");
+
+			const lock1 = await redlock.aquire(randomKey, {
+				duration: 2*1000
+			});
+
+			expect(lock1.key).toBe(randomKey);
+			expect(lock1.remainingTime).toBeGreaterThanOrEqual(1000);
+
+			try{
+
+				await redlock.aquire(randomKey);
+
+			}catch(e){
+
+				expect(e).toBeInstanceOf(RedLockError);
+				expect((e as RedLockError).messageName).toBe('noConsensus');
+
+			}
+
+			await new Promise((res)=>setTimeout(res, lock1.remainingTime));
+
+			const lock2 = await redlock.aquire(randomKey, {
+				retryCount: 5
+			});
+
+			expect(lock2.key).toBe(randomKey);
 
 		});
 
