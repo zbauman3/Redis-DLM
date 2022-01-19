@@ -95,7 +95,7 @@ export class Lock{
 		this._extend = extend;
 		this._release = release;
 
-	};
+	}
 
 	/**
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
@@ -109,7 +109,7 @@ export class Lock{
 
 		return this.remainingTime;
 
-	};
+	}
 
 	/** Attempts to release the lock. */
 	public async release(){
@@ -118,7 +118,7 @@ export class Lock{
 
 		this.expireTime = Date.now();
 
-	};
+	}
 
 }
 
@@ -152,7 +152,7 @@ export default class LockManager{
 		this.extend = this.extend.bind(this);
 		this.release = this.release.bind(this);
 
-	};
+	}
 
 	/** Attempts to aquire the lock. Resolves to a new `Lock` class. */
 	public async aquire(key: string, settings: Partial<LockManagerSettings> = {}){
@@ -251,7 +251,7 @@ export default class LockManager{
 			release: this.release,
 		});
 
-	};
+	}
 
 	/**
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
@@ -324,7 +324,7 @@ export default class LockManager{
 
 		return remainingTime;
 
-	};
+	}
 
 	/** Attempts to release the provided lock */
 	protected async release(lock: Lock){
@@ -344,7 +344,7 @@ export default class LockManager{
 
 		}
 
-	};
+	}
 
 	/** Executes the given Lua & arguments on the provided client */
 	protected async runLua(
@@ -378,7 +378,7 @@ export default class LockManager{
 			: client.eval(lua.script, {keys: keys, arguments: argv})
 		);
 
-	};
+	}
 
 	/** Calculates the remaining time of a lock, including drift. */
 	protected calculateRemainingTime(start: number, settings: Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'>){
@@ -386,7 +386,7 @@ export default class LockManager{
 		//duration - execution time - drift;
 		return Math.floor(settings.duration - (Date.now() - start) - (settings.driftFactor * settings.duration) - settings.driftConstant);
 
-	};
+	}
 
 	/** Checks if a given value is an Error and is a `NOSCRIPT` error. */
 	protected isNoScriptError(e: any){
@@ -408,7 +408,7 @@ export default class LockManager{
 			('createBuiltinCommand' in client)
 		);
 
-	};
+	}
 
 	/** A helper function to release without an existing `Lock` */
 	protected async noThrowQuickRelease({key, uid}:{key: string, uid: string}){
@@ -427,6 +427,6 @@ export default class LockManager{
 
 		}catch(_){ /** noop */ }
 
-	};
+	}
 
 }
