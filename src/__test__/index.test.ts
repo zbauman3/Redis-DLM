@@ -316,7 +316,7 @@ describe('LockManager', ()=>{
 
 		});
 
-		test(`aquire - Single try - ${name}`, async ()=>{
+		test(`acquire - Single try - ${name}`, async ()=>{
 
 			const lockManager = new TestLockManager(clients);
 
@@ -325,7 +325,7 @@ describe('LockManager', ()=>{
 			});
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await lockManager.aquire(randomKey, {
+			const res = await lockManager.acquire(randomKey, {
 				duration: 12345,
 				maxHoldTime: 67890
 			});
@@ -343,7 +343,7 @@ describe('LockManager', ()=>{
 
 		});
 
-		test(`aquire - Three tries, first two fail. - ${name}`, async ()=>{
+		test(`acquire - Three tries, first two fail. - ${name}`, async ()=>{
 
 			const lockManager = new TestLockManager(clients);
 
@@ -361,7 +361,7 @@ describe('LockManager', ()=>{
 			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await lockManager.aquire(randomKey, {
+			const res = await lockManager.acquire(randomKey, {
 				retryCount: 2
 			});
 
@@ -374,7 +374,7 @@ describe('LockManager', ()=>{
 
 		});
 
-		test(`aquire - Single try, minimum consensus. - ${name}`, async ()=>{
+		test(`acquire - Single try, minimum consensus. - ${name}`, async ()=>{
 
 			const lockManager = new TestLockManager(clients);
 
@@ -389,7 +389,7 @@ describe('LockManager', ()=>{
 			}
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await lockManager.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.acquire(randomKey).catch((e)=>e);
 
 			expect(res).toBeInstanceOf(Lock);
 			expect(res.key).toBe(randomKey);
@@ -399,7 +399,7 @@ describe('LockManager', ()=>{
 
 		});
 
-		test(`aquire - Single try, no consensus. - ${name}`, async ()=>{
+		test(`acquire - Single try, no consensus. - ${name}`, async ()=>{
 
 			const lockManager = new TestLockManager(clients);
 
@@ -416,7 +416,7 @@ describe('LockManager', ()=>{
 			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await lockManager.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.acquire(randomKey).catch((e)=>e);
 
 			expect(res).toBeInstanceOf(LockManagerError);
 			expect(res.messageName).toBe('noConsensus');
@@ -426,7 +426,7 @@ describe('LockManager', ()=>{
 
 		});
 
-		test(`aquire - Single try, took too long. - ${name}`, async ()=>{
+		test(`acquire - Single try, took too long. - ${name}`, async ()=>{
 
 			const lockManager = new TestLockManager(clients);
 
@@ -438,10 +438,10 @@ describe('LockManager', ()=>{
 			lockManager.pub_noThrowQuickRelease.mockResolvedValueOnce();
 
 			const randomKey = randomBytes(20).toString("hex");
-			const res = await lockManager.aquire(randomKey).catch((e)=>e);
+			const res = await lockManager.acquire(randomKey).catch((e)=>e);
 
 			expect(res).toBeInstanceOf(LockManagerError);
-			expect(res.messageName).toBe('tooLongToAquire');
+			expect(res.messageName).toBe('tooLongToAcquire');
 			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
 			expect(lockManager.pub_noThrowQuickRelease).toHaveBeenCalledTimes(1);
 			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
@@ -627,7 +627,7 @@ describe('LockManager', ()=>{
 			const res = await lockManager.pub_extend(lock).catch((e)=>e);
 
 			expect(res).toBeInstanceOf(LockManagerError);
-			expect(res.messageName).toBe('tooLongToAquire');
+			expect(res.messageName).toBe('tooLongToAcquire');
 			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
 			expect(lockManager.pub_calculateRemainingTime).toHaveBeenCalledTimes(1);
 
@@ -775,7 +775,7 @@ describe('LockManager', ()=>{
 			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock = await lockManager.aquire(randomKey, {  
+			const lock = await lockManager.acquire(randomKey, {  
 				duration: 15*1000
 			});
 
@@ -799,7 +799,7 @@ describe('LockManager', ()=>{
 			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock1 = await lockManager.aquire(randomKey, {
+			const lock1 = await lockManager.acquire(randomKey, {
 				duration: 2*1000
 			});
 
@@ -808,7 +808,7 @@ describe('LockManager', ()=>{
 
 			try{
 
-				await lockManager.aquire(randomKey);
+				await lockManager.acquire(randomKey);
 
 			}catch(e){
 
@@ -819,7 +819,7 @@ describe('LockManager', ()=>{
 
 			await new Promise((res)=>setTimeout(res, lock1.remainingTime+1000));
 
-			const lock2 = await lockManager.aquire(randomKey);
+			const lock2 = await lockManager.acquire(randomKey);
 
 			expect(lock2.key).toBe(randomKey);
 
@@ -832,7 +832,7 @@ describe('LockManager', ()=>{
 			const lockManager = new LockManager(clients);
 			const randomKey = randomBytes(20).toString("hex");
 
-			const lock1 = await lockManager.aquire(randomKey, {
+			const lock1 = await lockManager.acquire(randomKey, {
 				duration: 2*1000
 			});
 
@@ -841,7 +841,7 @@ describe('LockManager', ()=>{
 
 			try{
 
-				await lockManager.aquire(randomKey);
+				await lockManager.acquire(randomKey);
 
 			}catch(e){
 
@@ -852,7 +852,7 @@ describe('LockManager', ()=>{
 
 			await new Promise((res)=>setTimeout(res, lock1.remainingTime));
 
-			const lock2 = await lockManager.aquire(randomKey, {
+			const lock2 = await lockManager.acquire(randomKey, {
 				retryCount: 5
 			});
 

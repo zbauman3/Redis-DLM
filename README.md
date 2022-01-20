@@ -19,8 +19,8 @@ const lockManager = new LockManager([
 	 */
 ]);
 
-//aquire a lock
-const lock = await lockManager.aquire('myKey');
+//acquire a lock
+const lock = await lockManager.acquire('myKey');
 
 //the lock's key
 lock.key;
@@ -45,7 +45,7 @@ await lock.release();
 You can pass a settings object to the lock manager's constructor, these will be the default settings used across all new locks.
 ```typescript
 const lockManager = new LockManager(clients, {
-	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `10000`. */
+	/** The duration of the lock in milliseconds, before the time to acquire is subtracted. Default `10000`. */
 	duration: 10000,
 	/** The number of times to retry aquiring a lock. Default `0`. */
 	retryCount: 0,
@@ -59,9 +59,9 @@ const lockManager = new LockManager(clients, {
 	driftConstant: 5,
 });
 ```
-You can also pass the same settings object to `aquire`, these will be used as the settings for only this lock.
+You can also pass the same settings object to `acquire`, these will be used as the settings for only this lock.
 ```typescript
-const lock = await lockManager.aquire('myKey', {
+const lock = await lockManager.acquire('myKey', {
 	duration: 10000,
 	retryCount: 0,
 	retryDelay: 500,

@@ -1,5 +1,5 @@
 import { randomBytes } from "crypto";
-import { aquireLockLua, extendLockLua, removeLockLua } from "./luaStrings";
+import { acquireLockLua, extendLockLua, removeLockLua } from "./luaStrings";
 import type { Redis as IORedis, Cluster as IORedisCluster } from "ioredis";
 import type { createClient as createRedisClient, createCluster as createRedisCluster } from "redis";
 import LockManagerError from "./LockManagerError";
@@ -11,7 +11,7 @@ export type LockManagerClient = IORedisClient | NodeRedisClient;
 
 /** The settings for a lock. */
 export interface LockManagerSettings{
-	/** The duration of the lock in milliseconds, before the time to aquire is subtracted. Default `10000`. */
+	/** The duration of the lock in milliseconds, before the time to acquire is subtracted. Default `10000`. */
 	duration: number,
 	/** The number of times to retry aquiring a lock. Default `0`. */
 	retryCount: number,
@@ -154,8 +154,8 @@ export default class LockManager{
 
 	}
 
-	/** Attempts to aquire the lock. Resolves to a new `Lock` class. */
-	public async aquire(key: string, settings: Partial<LockManagerSettings> = {}){
+	/** Attempts to acquire the lock. Resolves to a new `Lock` class. */
+	public async acquire(key: string, settings: Partial<LockManagerSettings> = {}){
 
 		//step 1.
 		const start = Date.now();
@@ -171,7 +171,7 @@ export default class LockManager{
 			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
 		};
 
-		//if a lock was aquired
+		//if a lock was acquired
 		let success = false;
 
 		//retryCount+1 to include the initial try
@@ -179,7 +179,7 @@ export default class LockManager{
 
 			//step 2.
 			const results = await Promise.allSettled(
-				this.clients.map((client)=>this.runLua(client, aquireLockLua, [key], [uid, lockSettings.duration.toString()]))
+				this.clients.map((client)=>this.runLua(client, acquireLockLua, [key], [uid, lockSettings.duration.toString()]))
 			);
 
 			let successCount = 0;
@@ -236,7 +236,7 @@ export default class LockManager{
 			//step 5.
 			await this.noThrowQuickRelease({key, uid});
 
-			throw new LockManagerError('tooLongToAquire');
+			throw new LockManagerError('tooLongToAcquire');
 
 		}
 
@@ -252,6 +252,11 @@ export default class LockManager{
 		});
 
 	}
+
+	/** @deprecated Use `acquire`. This will be removed next major release. */
+	public async aquire(...args: Parameters<InstanceType<typeof LockManager>['acquire']>){
+		return this.acquire(...args);
+	} 
 
 	/**
 	 * Attempts to extend the lock. Resolves to the new `remainingTime`. \
@@ -315,10 +320,10 @@ export default class LockManager{
 
 		const remainingTime = this.calculateRemainingTime(start, lockSettings);
 
-		//took too long to aquire the lock
+		//took too long to acquire the lock
 		if(remainingTime <= 0){
 
-			throw new LockManagerError('tooLongToAquire');
+			throw new LockManagerError('tooLongToAcquire');
 
 		}
 
@@ -349,7 +354,7 @@ export default class LockManager{
 	/** Executes the given Lua & arguments on the provided client */
 	protected async runLua(
 		client: LockManagerClient,
-		lua: typeof aquireLockLua | typeof extendLockLua | typeof removeLockLua,
+		lua: typeof acquireLockLua | typeof extendLockLua | typeof removeLockLua,
 		keys: string[],
 		argv: string[]
 	){

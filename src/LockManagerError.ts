@@ -1,8 +1,8 @@
 
 export const LockManagerErrorMessages = {
 	minClientCount: 'At least one client is required.',
-	noConsensus: 'Failed to aquire a lock consensus.',
-	tooLongToAquire: 'Took too long to aquire the lock.',
+	noConsensus: 'Failed to acquire a lock consensus.',
+	tooLongToAcquire: 'Took too long to acquire the lock.',
 	lockNotValid: 'The lock is no longer valid.',
 	excededMaxHold : 'The lock has exceded its maximum hold time.',
 	wouldExcededMaxHold: "This extension would excede the lock's maximum hold time."
