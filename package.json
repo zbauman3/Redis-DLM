@@ -1,6 +1,6 @@
 {
   "name": "redis-dlm",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "A Distributed Lock Manager for Redis, implemented with the RedLock algorithm, using either node-redis or ioredis clients.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
