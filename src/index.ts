@@ -145,12 +145,12 @@ export default class LockManager{
 		this.clientConsensus = Math.floor(this.clients.length/2)+1;
 
 		this.settings = {
-			duration: (typeof settings.duration === 'number' ? settings.duration : defaultSettings.duration),
-			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : defaultSettings.retryCount),
-			retryDelay: (typeof settings.retryDelay === 'number' ? settings.retryDelay : defaultSettings.retryDelay),
-			maxHoldTime: (typeof settings.maxHoldTime === 'number' ? settings.maxHoldTime : defaultSettings.maxHoldTime),
-			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : defaultSettings.driftFactor),
-			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : defaultSettings.driftConstant),
+			duration: (typeof settings.duration === 'number' && settings.duration > 0 ? settings.duration : defaultSettings.duration),
+			retryCount: (typeof settings.retryCount === 'number' && settings.retryCount >= 0 ? settings.retryCount : defaultSettings.retryCount),
+			retryDelay: (typeof settings.retryDelay === 'number' && settings.retryDelay > 0 ? settings.retryDelay : defaultSettings.retryDelay),
+			maxHoldTime: (typeof settings.maxHoldTime === 'number' && settings.maxHoldTime > 0 ? settings.maxHoldTime : defaultSettings.maxHoldTime),
+			driftFactor: (typeof settings.driftFactor === 'number' && settings.driftFactor >= 0 && settings.driftFactor <= 1 ? settings.driftFactor : defaultSettings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' && settings.driftConstant >= 0 ? settings.driftConstant : defaultSettings.driftConstant),
 		};
 
 		// bind so they can be passed to the Locks
@@ -168,12 +168,12 @@ export default class LockManager{
 		const uid = randomBytes(20).toString("hex");
 		//settings for this specific lock
 		const lockSettings: LockManagerSettings = {
-			duration: (typeof settings.duration === 'number' ? settings.duration : this.settings.duration),
-			retryCount: (typeof settings.retryCount === 'number' ? settings.retryCount : this.settings.retryCount),
-			retryDelay: (typeof settings.retryDelay === 'number' ? settings.retryDelay : this.settings.retryDelay),
-			maxHoldTime: (typeof settings.maxHoldTime === 'number' ? settings.maxHoldTime : this.settings.maxHoldTime),
-			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
-			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
+			duration: (typeof settings.duration === 'number' && settings.duration > 0 ? settings.duration : this.settings.duration),
+			retryCount: (typeof settings.retryCount === 'number' && settings.retryCount >= 0 ? settings.retryCount : this.settings.retryCount),
+			retryDelay: (typeof settings.retryDelay === 'number' && settings.retryDelay > 0 ? settings.retryDelay : this.settings.retryDelay),
+			maxHoldTime: (typeof settings.maxHoldTime === 'number' && settings.maxHoldTime > 0 ? settings.maxHoldTime : this.settings.maxHoldTime),
+			driftFactor: (typeof settings.driftFactor === 'number' && settings.driftFactor >= 0 && settings.driftFactor <= 1 ? settings.driftFactor : this.settings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' && settings.driftConstant >= 0 ? settings.driftConstant : this.settings.driftConstant),
 		};
 
 		//if a lock was acquired
@@ -289,9 +289,9 @@ export default class LockManager{
 
 		//settings for this extend
 		const lockSettings: Pick<LockManagerSettings, 'duration' | 'driftFactor' | 'driftConstant'> = {
-			duration: (typeof settings.duration === 'number' ? settings.duration : lock.duration),
-			driftFactor: (typeof settings.driftFactor === 'number' ? settings.driftFactor : this.settings.driftFactor),
-			driftConstant: (typeof settings.driftConstant === 'number' ? settings.driftConstant : this.settings.driftConstant),
+			duration: (typeof settings.duration === 'number' && settings.duration > 0 ? settings.duration : lock.duration),
+			driftFactor: (typeof settings.driftFactor === 'number' && settings.driftFactor >= 0 && settings.driftFactor <= 1 ? settings.driftFactor : this.settings.driftFactor),
+			driftConstant: (typeof settings.driftConstant === 'number' && settings.driftConstant >= 0 ? settings.driftConstant : this.settings.driftConstant),
 		};
 
 		//if extending would put it past the max hold time
