@@ -1,5 +1,8 @@
 # Changelog
 
+## 1.1.1 (2022-01-25)
+- Remove `CHANGELOG.md` from npm package.
+
 ## 1.1.0 (2022-01-25)
 - `release` now resolves to the number of instances that confirmed the release. It also only rejects when a consensus for the release was not achieved.
 - Settings are now considered valid only if:
