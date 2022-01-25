@@ -69,7 +69,7 @@ describe('Lock', ()=>{
 
 	//mock functions instead of passing anything from a LockManager class
 	const extendFn = jest.fn<ReturnType<ConstructorParameters<typeof Lock>[0]['extend']>, Parameters<ConstructorParameters<typeof Lock>[0]['extend']>>(async ()=>remainingTime);
-	const releaseFn = jest.fn<ReturnType<ConstructorParameters<typeof Lock>[0]['release']>, Parameters<ConstructorParameters<typeof Lock>[0]['release']>>(async ()=>{});
+	const releaseFn = jest.fn<ReturnType<ConstructorParameters<typeof Lock>[0]['release']>, Parameters<ConstructorParameters<typeof Lock>[0]['release']>>(async ()=>1);
 
 	const testValues: ConstructorParameters<typeof Lock>[0] = {
 		key: 'abc',
@@ -641,7 +641,7 @@ describe('LockManager', ()=>{
 				lockManager.pub_runLua.mockResolvedValueOnce('Deleted');
 			});
 
-			await lockManager.pub_release(new Lock({
+			const res = await lockManager.pub_release(new Lock({
 				key: '123',
 				uid: '456',
 				remainingTime: 0,
@@ -652,6 +652,61 @@ describe('LockManager', ()=>{
 			}));
 
 			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(res).toBe(clients.length);
+
+		});
+
+		test(`release - ${name} - No consensus on release`, async ()=>{
+
+			const lockManager = new TestLockManager(clients);
+
+			clients.forEach((_, i)=>{
+				if(i+1 < lockManager.pub_clientConsensus){
+					lockManager.pub_runLua.mockResolvedValueOnce('Deleted');
+				}else{
+					lockManager.pub_runLua.mockResolvedValueOnce('Not Deleted');
+				}
+			});
+
+			const res = await lockManager.pub_release(new Lock({
+				key: '123',
+				uid: '456',
+				remainingTime: 0,
+				duration: 0,
+				maxHoldTime: 0,
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
+			})).catch((e)=>e);
+
+			expect(res).toBeInstanceOf(LockManagerError);
+			expect((res as LockManagerError).messageName).toBe('releaseFailure');
+
+		});
+
+		test(`release - ${name} - Consensus on release`, async ()=>{
+
+			const lockManager = new TestLockManager(clients);
+
+			clients.forEach((_, i)=>{
+				if(i+1 <= lockManager.pub_clientConsensus){
+					lockManager.pub_runLua.mockResolvedValueOnce('Deleted');
+				}else{
+					lockManager.pub_runLua.mockResolvedValueOnce('Not Deleted');
+				}
+			});
+
+			const res = await lockManager.pub_release(new Lock({
+				key: '123',
+				uid: '456',
+				remainingTime: 0,
+				duration: 0,
+				maxHoldTime: 0,
+				extend: lockManager.pub_extend.bind(lockManager),
+				release: lockManager.pub_release.bind(lockManager),
+			}));
+
+			expect(lockManager.pub_runLua).toHaveBeenCalledTimes(clients.length);
+			expect(res).toBe(lockManager.pub_clientConsensus);
 
 		});
 
@@ -757,7 +812,7 @@ describe('LockManager', ()=>{
 			const lockManager1 = new TestLockManager(clients);
 
 			//resolves
-			lockManager1.pub_release.mockResolvedValueOnce();
+			lockManager1.pub_release.mockResolvedValueOnce(clients.length);
 			await lockManager1.pub_noThrowQuickRelease({key: '123', uid: '456'});
 
 			expect(lockManager1.pub_release).toHaveBeenCalledTimes(1);
@@ -788,7 +843,9 @@ describe('LockManager', ()=>{
 
 			expect(lock.remainingTime).toBeGreaterThanOrEqual(19*1000);
 
-			await lock.release();
+			const released = await lock.release();
+
+			expect(released).toBe( clients.length );
 
 		});
 

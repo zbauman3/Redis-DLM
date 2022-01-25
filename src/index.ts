@@ -111,12 +111,17 @@ export class Lock{
 
 	}
 
-	/** Attempts to release the lock. */
+	/**
+	 * Attempts to release the lock. Resolves to the number of 
+	 * instances that confirmed the release.
+	 */
 	public async release(){
 
-		await this._release(this);
+		const released = await this._release(this);
 
 		this.expireTime = Date.now();
+
+		return released;
 
 	}
 
@@ -331,23 +336,34 @@ export default class LockManager{
 
 	}
 
-	/** Attempts to release the provided lock */
+	/**
+	 * Attempts to release the provided lock. Resolves to the number of 
+	 * instances that confirmed the release.
+	 */
 	protected async release(lock: Lock){
 
 		const results = await Promise.allSettled(
 			this.clients.map((client)=>this.runLua(client, removeLockLua, [lock.key], [lock.uid]))
 		);
 
+		let numReleased = 0;
+
 		for(let i = 0; i < results.length; i++){
 
 			const result = results[i]!;//for TS
-			if(result.status === 'rejected'){
+			if(result.status === 'fulfilled' && result.value === 'Deleted'){
 
-				throw result.reason;
+				numReleased++;
 
 			}
 
 		}
+
+		if(numReleased < this.clientConsensus){
+			throw new LockManagerError('releaseFailure');
+		}
+
+		return numReleased;
 
 	}
 
